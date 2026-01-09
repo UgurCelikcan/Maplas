@@ -19,6 +19,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select-place', id: number): void;
   (e: 'toggle-theme'): void;
+  (e: 'add-click'): void;
+  (e: 'delete-place', id: number): void;
+  (e: 'edit-place', place: any): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
@@ -71,9 +74,14 @@ function getCategoryEmoji(category: string) {
                 <p>Keşfedilecek Rotalar</p>
             </div>
         </div>
-        <button class="theme-toggle" @click="$emit('toggle-theme')" :title="isDarkMode ? 'Aydınlık Mod' : 'Karanlık Mod'">
-            {{ isDarkMode ? '☀️' : '🌙' }}
-        </button>
+        <div class="header-actions">
+            <button class="action-btn" @click="$emit('add-click')" title="Yeni Yer Ekle">
+                ➕
+            </button>
+            <button class="theme-toggle" @click="$emit('toggle-theme')" :title="isDarkMode ? 'Aydınlık Mod' : 'Karanlık Mod'">
+                {{ isDarkMode ? '☀️' : '🌙' }}
+            </button>
+        </div>
       </div>
       
       <div class="filters">
@@ -111,8 +119,18 @@ function getCategoryEmoji(category: string) {
           <div class="card-content">
             <div class="card-header">
                 <div class="title-row">
-                    <h3>{{ place.name }}</h3>
-                    <span class="category-icon" :title="place.category">{{ getCategoryEmoji(place.category) }}</span>
+                    <div class="title-left">
+                        <h3>{{ place.name }}</h3>
+                        <span class="category-icon" :title="place.category">{{ getCategoryEmoji(place.category) }}</span>
+                    </div>
+                    <div class="actions">
+                        <button class="icon-btn edit-btn" @click.stop="$emit('edit-place', place)" title="Düzenle">
+                            ✏️
+                        </button>
+                        <button class="icon-btn delete-btn" @click.stop="$emit('delete-place', place.id)" title="Sil">
+                            🗑️
+                        </button>
+                    </div>
                 </div>
                 <div class="meta-row">
                     <span class="city-badge">📍 {{ place.city }}</span>
@@ -169,7 +187,7 @@ function getCategoryEmoji(category: string) {
 .brand-row {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 20px;
 }
 
@@ -179,26 +197,41 @@ function getCategoryEmoji(category: string) {
     gap: 12px;
 }
 
-.theme-toggle {
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn, .theme-toggle {
     background: transparent;
     border: 1px solid #3f3f46;
     color: #fff;
     cursor: pointer;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     padding: 8px;
     border-radius: 8px;
     line-height: 1;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
 }
-.light-sidebar .theme-toggle {
+
+.light-sidebar .action-btn, .light-sidebar .theme-toggle {
     border-color: #cbd5e1;
     color: #1e293b;
 }
-.theme-toggle:hover {
+
+.action-btn:hover, .theme-toggle:hover {
     background-color: rgba(255,255,255,0.1);
+    border-color: #42b883;
 }
-.light-sidebar .theme-toggle:hover {
+
+.light-sidebar .action-btn:hover, .light-sidebar .theme-toggle:hover {
     background-color: #f1f5f9;
+    border-color: #42b883;
 }
 
 .logo-icon {
@@ -385,6 +418,46 @@ function getCategoryEmoji(category: string) {
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 6px;
+}
+
+.title-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-grow: 1;
+    overflow: hidden; /* Prevent text overflow if title is long */
+}
+
+.actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.place-list li:hover .actions {
+    opacity: 1;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.delete-btn:hover {
+    background-color: rgba(239, 68, 68, 0.15);
+}
+
+.edit-btn:hover {
+    background-color: rgba(66, 184, 131, 0.15);
 }
 
 .place-list h3 {

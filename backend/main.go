@@ -123,7 +123,7 @@ func seedDB() {
 
 func enableCors(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 
@@ -133,26 +133,103 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT id, name, description, lat, lng, category, city FROM places")
-	if err != nil {
-		http.Error(w, "Database query error", http.StatusInternalServerError)
-		log.Printf("Error querying database: %v", err)
-		return
-	}
-	defer rows.Close()
-
-	var places []Place
-	for rows.Next() {
-		var p Place
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Lat, &p.Lng, &p.Category, &p.City); err != nil {
-			log.Printf("Error scanning row: %v", err)
-			continue
+	if r.Method == "GET" {
+		rows, err := db.Query("SELECT id, name, description, lat, lng, category, city FROM places ORDER BY id DESC")
+		if err != nil {
+			http.Error(w, "Database query error", http.StatusInternalServerError)
+			log.Printf("Error querying database: %v", err)
+			return
 		}
-		places = append(places, p)
-	}
+		defer rows.Close()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(places)
+		var places []Place
+		for rows.Next() {
+			var p Place
+			if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.Lat, &p.Lng, &p.Category, &p.City); err != nil {
+				log.Printf("Error scanning row: %v", err)
+				continue
+			}
+			places = append(places, p)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(places)
+	} else if r.Method == "POST" {
+		var p Place
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		err := db.QueryRow(
+			"INSERT INTO places (name, description, lat, lng, category, city) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+			p.Name, p.Description, p.Lat, p.Lng, p.Category, p.City,
+		).Scan(&p.ID)
+
+		if err != nil {
+			http.Error(w, "Database insert error", http.StatusInternalServerError)
+			log.Printf("Error inserting place: %v", err)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(p)
+	} else if r.Method == "PUT" {
+		var p Place
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if p.ID == 0 {
+			http.Error(w, "Missing place ID", http.StatusBadRequest)
+			return
+		}
+
+		res, err := db.Exec(
+			"UPDATE places SET name=$1, description=$2, lat=$3, lng=$4, category=$5, city=$6 WHERE id=$7",
+			p.Name, p.Description, p.Lat, p.Lng, p.Category, p.City, p.ID,
+		)
+
+		if err != nil {
+			http.Error(w, "Database update error", http.StatusInternalServerError)
+			log.Printf("Error updating place: %v", err)
+			return
+		}
+
+		rowsAffected, _ := res.RowsAffected()
+		if rowsAffected == 0 {
+			http.Error(w, "Place not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(p)
+	} else if r.Method == "DELETE" {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+
+		res, err := db.Exec("DELETE FROM places WHERE id = $1", id)
+		if err != nil {
+			http.Error(w, "Database delete error", http.StatusInternalServerError)
+			log.Printf("Error deleting place: %v", err)
+			return
+		}
+
+		rowsAffected, _ := res.RowsAffected()
+		if rowsAffected == 0 {
+			http.Error(w, "Place not found", http.StatusNotFound)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func main() {
