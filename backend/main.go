@@ -76,7 +76,7 @@ func initDB() {
 		log.Fatalf("Failed to create table: %v", err)
 	}
 
-	seedDB()
+	// seedDB()
 }
 
 func seedDB() {
