@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, provide, watch } from 'vue';
+import { ref, provide, watch, onMounted } from 'vue';
+import axios from 'axios';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
-import placesData from './assets/places.json';
 
 interface Place {
   id: number;
@@ -14,9 +14,18 @@ interface Place {
   city: string;
 }
 
-const places = ref<Place[]>(placesData);
+const places = ref<Place[]>([]);
 const selectedPlaceId = ref<number | null>(null);
 const isDarkMode = ref(true);
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<Place[]>('http://localhost:8080/api/places');
+    places.value = response.data;
+  } catch (error) {
+    console.error('Error fetching places:', error);
+  }
+});
 
 function handleSelectPlace(id: number) {
   selectedPlaceId.value = id;

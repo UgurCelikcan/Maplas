@@ -1,0 +1,110 @@
+[
+  {
+    "id": 1,
+    "name": "Ayasofya-i Kebir Cami-i Şerifi",
+    "description": "İstanbul - Tarihi yarımadada bulunan, eşsiz mimarisiyle ünlü ibadethane ve eski müze.",
+    "lat": 41.0086,
+    "lng": 28.9802,
+    "category": "Tarihi",
+    "city": "İstanbul"
+  },
+  {
+    "id": 2,
+    "name": "Kapadokya (Peribacaları)",
+    "description": "Nevşehir - Doğal oluşumları, yer altı şehirleri ve sıcak hava balonlarıyla ünlü bölge.",
+    "lat": 38.6431,
+    "lng": 34.8289,
+    "category": "Doğa",
+    "city": "Nevşehir"
+  },
+  {
+    "id": 3,
+    "name": "Efes Antik Kenti",
+    "description": "İzmir - Roma dönemine ait dünyanın en iyi korunmuş antik kentlerinden biri.",
+    "lat": 37.9422,
+    "lng": 27.3636,
+    "category": "Antik Kent",
+    "city": "İzmir"
+  },
+  {
+    "id": 4,
+    "name": "Sümela Manastırı",
+    "description": "Trabzon - Karadağ'ın eteklerinde, sarp kayalıklar üzerine kurulmuş tarihi manastır.",
+    "lat": 40.6903,
+    "lng": 39.6582,
+    "category": "Tarihi",
+    "city": "Trabzon"
+  },
+  {
+    "id": 5,
+    "name": "Pamukkale Travertenleri",
+    "description": "Denizli - Bembeyaz kireçtaşı havuzları ve şifalı termal sularıyla ünlü doğa harikası.",
+    "lat": 37.9256,
+    "lng": 29.1218,
+    "category": "Doğa",
+    "city": "Denizli"
+  },
+  {
+    "id": 6,
+    "name": "Nemrut Dağı",
+    "description": "Adıyaman - Kommagene Krallığı'na ait dev heykellerin bulunduğu, gün doğumuyla ünlü dağ.",
+    "lat": 37.9806,
+    "lng": 38.7408,
+    "category": "Tarihi",
+    "city": "Adıyaman"
+  },
+  {
+    "id": 7,
+    "name": "Göbeklitepe",
+    "description": "Şanlıurfa - Tarihin bilinen en eski tapınak kompleksi ve kült merkezi.",
+    "lat": 37.2231,
+    "lng": 38.9225,
+    "category": "Antik Kent",
+    "city": "Şanlıurfa"
+  },
+  {
+    "id": 8,
+    "name": "Ölüdeniz",
+    "description": "Muğla - Turkuaz rengi denizi ve yamaç paraşütü aktiviteleriyle ünlü plaj.",
+    "lat": 36.5493,
+    "lng": 29.1247,
+    "category": "Plaj",
+    "city": "Muğla"
+  },
+  {
+    "id": 9,
+    "name": "Anıtkabir",
+    "description": "Ankara - Türkiye Cumhuriyeti'nin kurucusu Mustafa Kemal Atatürk'ün anıt mezarı.",
+    "lat": 39.9255,
+    "lng": 32.8369,
+    "category": "Müze",
+    "city": "Ankara"
+  },
+  {
+    "id": 10,
+    "name": "Aspendos Antik Tiyatrosu",
+    "description": "Antalya - Akustiğiyle ünlü, günümüze kadar en iyi korunmuş Roma tiyatrosu.",
+    "lat": 36.9389,
+    "lng": 31.1719,
+    "category": "Antik Kent",
+    "city": "Antalya"
+  },
+  {
+    "id": 11,
+    "name": "İshak Paşa Sarayı",
+    "description": "Ağrı - Osmanlı mimarisinin Anadolu'daki en seçkin örneklerinden biri olan tarihi saray.",
+    "lat": 39.5211,
+    "lng": 44.1283,
+    "category": "Tarihi",
+    "city": "Ağrı"
+  },
+  {
+    "id": 12,
+    "name": "Akdamar Adası",
+    "description": "Van - Van Gölü üzerinde bulunan ve tarihi Ermeni kilisesine ev sahipliği yapan ada.",
+    "lat": 38.3406,
+    "lng": 43.0367,
+    "category": "Tarihi",
+    "city": "Van"
+  }
+]
