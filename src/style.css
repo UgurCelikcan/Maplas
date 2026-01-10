@@ -1,16 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -21,16 +16,177 @@ body {
   min-height: 100vh;
 }
 
-#app {
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  padding: 0;
-  display: flex; /* Sidebar ve Map yanyana */
-  overflow: hidden;
+@layer utilities {
+  /* Leaflet Fixes for Tailwind Preflight */
+  .leaflet-pane,
+  .leaflet-tile,
+  .leaflet-marker-icon,
+  .leaflet-marker-shadow,
+  .leaflet-tile-container,
+  .leaflet-pane > svg,
+  .leaflet-pane > canvas,
+  .leaflet-zoom-box,
+  .leaflet-image-layer,
+  .leaflet-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+  
+  .leaflet-container {
+    overflow: hidden;
+  }
+  
+  .leaflet-tile,
+  .leaflet-marker-icon,
+  .leaflet-marker-shadow {
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+    -webkit-user-drag: none;
+  }
+  
+  /* Fix images in Leaflet controls being affected by Tailwind's img { display: block } */
+  .leaflet-control-zoom-in,
+  .leaflet-control-zoom-out,
+  .leaflet-control-attribution {
+      box-sizing: content-box;
+  }
 }
 
-/* Leaflet map z-index fix if needed */
-.leaflet-container {
-  z-index: 0;
+@layer components {
+    /* Custom Marker Pin */
+    .marker-pin {
+        width: 40px;
+        height: 40px;
+        border-radius: 50% 50% 50% 0;
+        background: var(--marker-color);
+        position: absolute;
+        transform: rotate(-45deg);
+        left: 50%;
+        top: 50%;
+        margin: -20px 0 0 -20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        border: 2px solid white;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .marker-pin.selected {
+        transform: rotate(-45deg) scale(1.2);
+        z-index: 1000;
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.5);
+    }
+
+    .marker-emoji {
+        transform: rotate(45deg);
+        font-size: 1.2rem;
+    }
+
+    /* Cluster Icons */
+    .custom-cluster {
+        width: 40px;
+        height: 40px;
+        background-color: #10b981; /* emerald-500 */
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        border: 3px solid rgba(255,255,255,0.4);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    /* Modern Popup */
+    .modern-popup .leaflet-popup-content-wrapper {
+        @apply p-0 rounded-xl overflow-hidden shadow-xl border-none bg-white dark:bg-zinc-800 text-slate-800 dark:text-zinc-100;
+    }
+    
+    .modern-popup .leaflet-popup-tip {
+        @apply bg-white dark:bg-zinc-800;
+    }
+
+    .modern-popup .leaflet-popup-content {
+        margin: 14px 20px !important;
+        line-height: 1.5;
+    }
+
+    .custom-popup h3 {
+        @apply m-0 text-lg font-bold text-slate-900 dark:text-white mb-2;
+    }
+
+    .custom-popup p {
+        @apply m-0 text-sm text-slate-600 dark:text-zinc-300 mb-3;
+    }
+
+    .popup-header {
+        @apply flex justify-between items-center mb-2 text-xs text-slate-500 dark:text-zinc-400 font-medium;
+    }
+
+    /* User Location Marker */
+    .user-marker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .user-dot {
+        width: 12px;
+        height: 12px;
+        @apply bg-blue-500 border-2 border-white rounded-full z-10;
+    }
+    .user-pulse {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        @apply bg-blue-500/40 rounded-full animate-ping;
+    }
+
+    /* Leaflet Routing Machine */
+    .leaflet-routing-container {
+        @apply bg-white text-slate-900 border-slate-200 shadow-lg p-3 rounded-xl !important;
+    }
+
+    .dark .leaflet-routing-container {
+        @apply bg-zinc-900 text-white border-zinc-700 shadow-xl !important;
+    }
+
+    .leaflet-routing-alt {
+        @apply max-h-80 overflow-y-auto !important;
+    }
+
+    .dark .leaflet-routing-alt tr:hover {
+        @apply bg-zinc-800 cursor-pointer !important;
+    }
+
+    .leaflet-routing-alt tr:hover {
+        @apply bg-slate-100 cursor-pointer !important;
+    }
+
+    .dark .leaflet-routing-container h2,
+    .dark .leaflet-routing-container h3,
+    .dark .leaflet-routing-container span,
+    .dark .leaflet-routing-container div,
+    .dark .leaflet-routing-container table,
+    .dark .leaflet-routing-container tr,
+    .dark .leaflet-routing-container td,
+    .dark .leaflet-routing-alt-summary h2,
+    .dark .leaflet-routing-alt-summary h3 {
+        @apply text-white !important;
+    }
+
+    .dark .leaflet-routing-alt-summary {
+        @apply border-zinc-700 !important;
+    }
+
+    .dark .leaflet-routing-container p {
+        @apply text-zinc-300 !important;
+    }
+
+    /* Icon fixes for dark mode */
+    .dark .leaflet-routing-icon {
+        filter: invert(1) brightness(2);
+    }
 }

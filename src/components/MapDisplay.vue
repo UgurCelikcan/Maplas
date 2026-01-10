@@ -2,9 +2,6 @@
 import { onMounted, ref, watch, shallowRef, inject } from 'vue';
 import L from 'leaflet';
 
-// Leaflet marker icon fix for Webpack/Vite
-// ... (icons are custom divIcons now)
-
 interface Place {
   id: number;
   name: string;
@@ -13,6 +10,7 @@ interface Place {
   lng: number;
   category: string;
   city: string;
+  imageUrl?: string;
 }
 
 const props = defineProps<{
@@ -22,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select-place', id: number): void;
+  (e: 'view-comments', id: number): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
@@ -35,7 +34,6 @@ const routingControl = shallowRef<any>(null);
 const userLocation = ref<{ lat: number; lng: number } | null>(null);
 const userMarker = shallowRef<L.Marker | null>(null);
 
-// Kategoriye göre renk belirle (Değişmedi)
 const getCategoryColor = (category: string) => {
   switch (category) {
     case 'Tarihi': return '#f87171'; // Red 400
@@ -142,7 +140,7 @@ function drawRoute(toLat: number, toLng: number) {
                 missingRouteTolerance: 0
             },
             // @ts-ignore
-            createMarker: () => null // Rota başlangıç/bitiş markerlarını gizle (bizimkiler var)
+            createMarker: () => null
         }).addTo(map.value);
     }
 }
@@ -159,7 +157,6 @@ onMounted(() => {
 
     L.control.zoom({ position: 'bottomright' }).addTo(map.value);
 
-    // Popup içindeki butona tıklamayı dinle
     map.value.on('popupopen', (e: any) => {
         const popupNode = e.popup._contentNode;
         const btn = popupNode.querySelector('.btn-route');
@@ -171,9 +168,17 @@ onMounted(() => {
                 drawRoute(lat, lng);
             });
         }
+        
+        const btnComments = popupNode.querySelector('.btn-comments');
+        if (btnComments) {
+            L.DomEvent.on(btnComments, 'click', (ev: any) => {
+                L.DomEvent.stopPropagation(ev);
+                const id = parseInt(btnComments.dataset.id);
+                emit('view-comments', id);
+            });
+        }
     });
 
-    // Cluster Group'u oluştur
     // @ts-ignore
     if (L.markerClusterGroup) {
         // @ts-ignore
@@ -197,12 +202,10 @@ onMounted(() => {
   }
 });
 
-// Watch theme change to update map tiles
 watch(isDarkMode, (newVal) => {
     if (tileLayer.value) {
         tileLayer.value.setUrl(getTileLayerUrl(newVal));
     }
-    // Popup style changes via body class, no JS needed here for popups
 });
 
 watch(() => props.places, () => {
@@ -211,7 +214,6 @@ watch(() => props.places, () => {
 
 watch(() => props.selectedPlaceId, (newId, oldId) => {
   if (map.value && markerClusterGroup.value) {
-    // Eski seçili ikonunu sıfırla
     if (oldId) {
         const oldMarker = markersMap.value.get(oldId);
         const oldPlace = props.places.find(p => p.id === oldId);
@@ -236,7 +238,6 @@ watch(() => props.selectedPlaceId, (newId, oldId) => {
 function updateMarkers() {
   if (!map.value) return;
 
-  // Cluster grubu varsa temizle, yoksa map üzerinden markerları temizle
   if (markerClusterGroup.value) {
     markerClusterGroup.value.clearLayers();
   } else {
@@ -250,18 +251,24 @@ function updateMarkers() {
       icon: createCustomIcon(place.category, props.selectedPlaceId === place.id)
     });
 
-    // Not: Popup içeriği string olduğu için burada class değişikliği yapmak zor.
-    // CSS tarafında body.light-theme .custom-popup ile yöneteceğiz.
+    const imageHtml = place.imageUrl 
+        ? `<div class="w-[calc(100%+40px)] -mx-5 -mt-5 mb-3 h-32 rounded-t-xl overflow-hidden"><img src="${place.imageUrl}" alt="${place.name}" class="w-full h-full object-cover" /></div>` 
+        : '';
+
     const popupContent = `
         <div class="custom-popup">
+            ${imageHtml}
             <div class="popup-header">
                 <span class="popup-category">${getCategoryEmoji(place.category)} ${place.category}</span>
                 <span class="popup-city">📍 ${place.city}</span>
             </div>
             <h3>${place.name}</h3>
             <p>${place.description}</p>
-            <button class="btn-route" data-lat="${place.lat}" data-lng="${place.lng}">
+            <button class="btn-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-slate-900 border-none py-2 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}">
                 🚗 Yol Tarifi Al
+            </button>
+            <button class="btn-comments w-full mt-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white border-none py-2 px-3 rounded-lg font-medium cursor-pointer transition-colors flex items-center justify-center gap-2" data-id="${place.id}">
+                💬 Yorumlar & Puan Ver
             </button>
         </div>
     `;
@@ -279,7 +286,6 @@ function updateMarkers() {
     if (markerClusterGroup.value) {
         markerClusterGroup.value.addLayer(marker);
     } else {
-        // Fallback
         marker.addTo(map.value!);
     }
     
@@ -289,124 +295,10 @@ function updateMarkers() {
 </script>
 
 <template>
-  <div class="map-wrapper">
-    <div ref="mapContainer" class="map-container"></div>
-    <button class="locate-btn" @click="locateUser" title="Konumumu Bul">
+  <div class="relative w-full h-full flex-grow">
+    <div ref="mapContainer" class="w-full h-full z-0"></div>
+    <button class="absolute bottom-5 right-[60px] z-[999] w-11 h-11 bg-emerald-500 border-none rounded-full text-2xl cursor-pointer shadow-lg flex items-center justify-center transition-all hover:scale-110 hover:bg-emerald-600" @click="locateUser" title="Konumumu Bul">
         📍
     </button>
   </div>
 </template>
-
-<style>
-/* ... (Previous Styles) ... */
-
-/* Route Button in Popup */
-.btn-route {
-    margin-top: 12px;
-    width: 100%;
-    background-color: #42b883;
-    color: #1a1a1a;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.btn-route:hover {
-    background-color: #3aa876;
-}
-
-/* User Location Marker */
-.user-marker {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.user-dot {
-    width: 12px;
-    height: 12px;
-    background-color: #3b82f6;
-    border: 2px solid white;
-    border-radius: 50%;
-    z-index: 2;
-}
-.user-pulse {
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    background-color: rgba(59, 130, 246, 0.4);
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-@keyframes pulse {
-    0% { transform: scale(0.5); opacity: 1; }
-    100% { transform: scale(1.5); opacity: 0; }
-}
-
-/* Leaflet Routing Machine Overrides */
-.leaflet-routing-container {
-    background-color: #18181b !important;
-    color: #fff !important;
-    border: 1px solid #3f3f46 !important;
-    padding: 10px !important;
-    border-radius: 12px !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
-}
-body.light-theme .leaflet-routing-container {
-    background-color: #fff !important;
-    color: #0f172a !important;
-    border-color: #e2e8f0 !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-}
-.leaflet-routing-alt {
-    max-height: 200px;
-    overflow-y: auto;
-}
-.leaflet-routing-alt tr:hover {
-    background-color: #27272a !important;
-    cursor: pointer;
-}
-body.light-theme .leaflet-routing-alt tr:hover {
-    background-color: #f1f5f9 !important;
-}
-</style>
-
-<style scoped>
-.map-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    flex-grow: 1;
-}
-.map-container {
-  width: 100%;
-  height: 100%;
-}
-.locate-btn {
-    position: absolute;
-    bottom: 20px;
-    right: 60px; /* Zoom control'ün solunda */
-    z-index: 999;
-    width: 44px;
-    height: 44px;
-    background-color: #42b883;
-    border: none;
-    border-radius: 50%;
-    font-size: 1.5rem;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s, background-color 0.2s;
-}
-.locate-btn:hover {
-    transform: scale(1.1);
-    background-color: #3aa876;
-}
-</style>

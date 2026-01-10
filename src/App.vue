@@ -4,6 +4,9 @@ import axios from 'axios';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
 import AddPlaceModal from './components/AddPlaceModal.vue';
+import CommentsModal from './components/CommentsModal.vue';
+import AuthModal from './components/AuthModal.vue';
+import AdminDashboard from './components/AdminDashboard.vue';
 
 interface Place {
   id: number;
@@ -13,13 +16,33 @@ interface Place {
   lng: number;
   category: string;
   city: string;
+  imageUrl?: string;
+}
+
+interface User {
+  username: string;
+  role: string;
 }
 
 const places = ref<Place[]>([]);
 const selectedPlaceId = ref<number | null>(null);
 const isDarkMode = ref(true);
 const showModal = ref(false);
+const showCommentsModal = ref(false);
+const showAuthModal = ref(false);
+const showAdminDashboard = ref(false);
+const currentUser = ref<User | null>(null);
+const commentPlace = ref<{id: number, name: string} | null>(null);
 const editingPlace = ref<Place | undefined>(undefined);
+
+// Axios Interceptor for Authorization Token
+axios.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 const fetchPlaces = async () => {
   try {
@@ -32,11 +55,36 @@ const fetchPlaces = async () => {
   }
 };
 
+function checkAuth() {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    if (token && userStr) {
+        currentUser.value = JSON.parse(userStr);
+    }
+}
+
 onMounted(() => {
+  checkAuth();
   fetchPlaces();
 });
 
+function handleLoginSuccess(user: User, token: string) {
+    currentUser.value = user;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    showAuthModal.value = false;
+}
+
+function handleLogout() {
+    currentUser.value = null;
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    showAdminDashboard.value = false;
+}
+
 function openAddModal() {
+    // Optional: Require login to add places? For now, allowing public add (pending approval)
+    // If we wanted to restrict: if (!currentUser.value) return showAuthModal.value = true;
     editingPlace.value = undefined;
     showModal.value = true;
 }
@@ -49,7 +97,6 @@ function openEditModal(place: Place) {
 async function handleSavePlace(placeData: Place) {
   try {
     if (placeData.id) {
-        // Update existing
         const response = await axios.put<Place>('http://localhost:8080/api/places', placeData);
         if (response.status === 200) {
             const index = places.value.findIndex(p => p.id === placeData.id);
@@ -58,10 +105,9 @@ async function handleSavePlace(placeData: Place) {
             }
         }
     } else {
-        // Create new
         const response = await axios.post<Place>('http://localhost:8080/api/places', placeData);
         if (response.status === 201) {
-            places.value.unshift(response.data);
+             alert('Yer eklendi ve yönetici onayına gönderildi.');
         }
     }
     showModal.value = false;
@@ -80,9 +126,13 @@ async function handleDeletePlace(id: number) {
     if (selectedPlaceId.value === id) {
         selectedPlaceId.value = null;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting place:', error);
-    alert('Yer silinirken bir hata oluştu.');
+    if (error.response && error.response.status === 403) {
+        alert('Bu işlem için yetkiniz yok.');
+    } else {
+        alert('Yer silinirken bir hata oluştu.');
+    }
   }
 }
 
@@ -90,65 +140,76 @@ function handleSelectPlace(id: number) {
   selectedPlaceId.value = id;
 }
 
+function handleViewComments(id: number) {
+  const place = places.value.find(p => p.id === id);
+  if (place) {
+    commentPlace.value = { id: place.id, name: place.name };
+    showCommentsModal.value = true;
+  }
+}
+
 function toggleTheme() {
   isDarkMode.value = !isDarkMode.value;
 }
 
-// Provide theme to children
 provide('isDarkMode', isDarkMode);
 
-// Update body class for global styles if needed
 watch(isDarkMode, (newVal) => {
   if (newVal) {
-    document.body.classList.add('dark-theme');
-    document.body.classList.remove('light-theme');
+    document.documentElement.classList.add('dark');
   } else {
-    document.body.classList.add('light-theme');
-    document.body.classList.remove('dark-theme');
+    document.documentElement.classList.remove('dark');
   }
 }, { immediate: true });
 </script>
 
 <template>
-  <div class="app-container" :class="{ 'light-mode': !isDarkMode }">
+  <div class="flex w-screen h-screen overflow-hidden bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-white transition-colors duration-300">
     <PlaceList 
       :places="places" 
-      :selected-place-id="selectedPlaceId" 
+      :selected-place-id="selectedPlaceId"
+      :current-user="currentUser"
       @select-place="handleSelectPlace"
       @toggle-theme="toggleTheme"
       @add-click="openAddModal"
       @delete-place="handleDeletePlace"
       @edit-place="openEditModal"
+      @open-auth="showAuthModal = true"
+      @logout="handleLogout"
+      @open-admin="showAdminDashboard = true"
     />
     <MapDisplay 
       :places="places" 
       :selected-place-id="selectedPlaceId" 
       @select-place="handleSelectPlace"
+      @view-comments="handleViewComments"
     />
 
-    <!-- Modal -->
+    <!-- Modals -->
     <AddPlaceModal 
       v-if="showModal" 
       :initial-data="editingPlace"
       @close="showModal = false" 
       @save-place="handleSavePlace" 
     />
+
+    <CommentsModal
+      v-if="showCommentsModal && commentPlace"
+      :place-id="commentPlace.id"
+      :place-name="commentPlace.name"
+      @close="showCommentsModal = false"
+    />
+
+    <AuthModal
+      v-if="showAuthModal"
+      @close="showAuthModal = false"
+      @login-success="handleLoginSuccess"
+    />
+
+    <AdminDashboard
+      v-if="showAdminDashboard"
+      @close="showAdminDashboard = false"
+      @place-approved="fetchPlaces"
+    />
   </div>
 </template>
-
-<style scoped>
-.app-container {
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  background-color: #0f172a; /* Default dark bg */
-  color: #fff;
-  transition: background-color 0.3s, color 0.3s;
-}
-
-.app-container.light-mode {
-  background-color: #f8fafc;
-  color: #1e293b;
-}
-</style>
