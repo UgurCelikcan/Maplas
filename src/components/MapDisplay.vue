@@ -33,6 +33,7 @@ const tileLayer = shallowRef<L.TileLayer | null>(null);
 const routingControl = shallowRef<any>(null);
 const userLocation = ref<{ lat: number; lng: number } | null>(null);
 const userMarker = shallowRef<L.Marker | null>(null);
+const routeInfo = ref<{ roads: string[], totalDistance: string, totalTime: string } | null>(null);
 
 const getCategoryColor = (category: string) => {
   switch (category) {
@@ -120,12 +121,13 @@ function drawRoute(toLat: number, toLng: number) {
 
     if (routingControl.value) {
         map.value.removeControl(routingControl.value);
+        routeInfo.value = null;
     }
 
     // @ts-ignore
     if (L.Routing) {
         // @ts-ignore
-        routingControl.value = L.Routing.control({
+        const control = L.Routing.control({
             waypoints: [
                 L.latLng(userLocation.value.lat, userLocation.value.lng),
                 L.latLng(toLat, toLng)
@@ -134,6 +136,7 @@ function drawRoute(toLat: number, toLng: number) {
             addWaypoints: false,
             fitSelectedRoutes: true,
             showAlternatives: false,
+            show: false, // Hide default container
             lineOptions: {
                 styles: [{ color: '#42b883', opacity: 0.8, weight: 6 }],
                 extendToWaypoints: true,
@@ -141,7 +144,57 @@ function drawRoute(toLat: number, toLng: number) {
             },
             // @ts-ignore
             createMarker: () => null
-        }).addTo(map.value);
+        });
+
+        control.addTo(map.value);
+        routingControl.value = control;
+
+        control.on('routesfound', function(e: any) {
+            const routes = e.routes;
+            const summary = routes[0].summary;
+            
+            // Format time
+            const totalMinutes = Math.round(summary.totalTime / 60);
+            const hours = Math.floor(totalMinutes / 60);
+            const mins = totalMinutes % 60;
+            const timeStr = hours > 0 ? `${hours} sa ${mins} dk` : `${mins} dk`;
+
+            // Format distance
+            const distKm = (summary.totalDistance / 1000).toFixed(1);
+
+            // Extract unique roads
+            const instructions = routes[0].instructions;
+            const roads: string[] = instructions
+                .map((i: any) => i.road)
+                .filter((r: string) => {
+                    if (!r || r.trim().length === 0 || r === '{road}') return false;
+                    const name = r.toLocaleUpperCase('tr-TR');
+                    
+                    // Strict filter for Highways / Major State Roads
+                    const isHighway = name.match(/^(O|D|E)\s?-?\s?\d+/) || 
+                                      name.includes('OTOYOL') || 
+                                      name.includes('ÇEVRE YOLU');
+                                      
+                    return isHighway;
+                })
+                .reduce((acc: string[], curr: string) => {
+                    if (acc.length === 0 || acc[acc.length - 1] !== curr) {
+                        acc.push(curr);
+                    }
+                    return acc;
+                }, []); // Remove consecutive duplicates
+
+            routeInfo.value = {
+                roads: roads.length > 0 ? roads : ['Ana Yollar / Şehir İçi'],
+                totalDistance: `${distKm} km`,
+                totalTime: timeStr
+            };
+        });
+        
+        control.on('routingerror', function() {
+            alert('Rota bulunamadı.');
+            routeInfo.value = null;
+        });
     }
 }
 
@@ -300,5 +353,27 @@ function updateMarkers() {
     <button class="absolute bottom-5 right-[60px] z-[999] w-11 h-11 bg-emerald-500 border-none rounded-full text-2xl cursor-pointer shadow-lg flex items-center justify-center transition-all hover:scale-110 hover:bg-emerald-600" @click="locateUser" title="Konumumu Bul">
         📍
     </button>
+    
+    <!-- Custom Route Info Panel -->
+    <div v-if="routeInfo" class="absolute top-4 right-4 z-[999] bg-white dark:bg-zinc-800 p-4 rounded-xl shadow-xl border border-slate-200 dark:border-zinc-700 max-w-[280px] w-[90%] md:w-auto animate-in fade-in slide-in-from-top-4">
+        <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-100 dark:border-zinc-700">
+            <div>
+                <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ routeInfo.totalTime }}</span>
+                <span class="text-sm text-slate-500 dark:text-zinc-400 ml-2">({{ routeInfo.totalDistance }})</span>
+            </div>
+            <button class="bg-transparent border-none text-slate-400 hover:text-slate-600 cursor-pointer text-lg" @click="routeInfo = null; if(routingControl) { map?.removeControl(routingControl); routingControl = null; }">✕</button>
+        </div>
+        
+        <div class="max-h-[150px] overflow-y-auto space-y-1 pr-1">
+             <div v-for="(road, index) in routeInfo.roads" :key="index" class="flex items-center gap-2 text-sm text-slate-700 dark:text-zinc-300">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0"></span>
+                <span class="truncate">{{ road }}</span>
+             </div>
+        </div>
+        
+        <div class="mt-3 pt-2 border-t border-slate-100 dark:border-zinc-700 text-xs text-center text-slate-400">
+            Güzergah üzerindeki ana yollar
+        </div>
+    </div>
   </div>
 </template>

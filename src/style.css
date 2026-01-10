@@ -147,6 +147,39 @@ body {
     /* Leaflet Routing Machine */
     .leaflet-routing-container {
         @apply bg-white text-slate-900 border-slate-200 shadow-lg p-3 rounded-xl !important;
+        width: 320px !important;
+        max-width: 90vw !important;
+        max-height: 40vh !important;
+        overflow-y: auto !important;
+        font-size: 12px !important;
+    }
+
+    @media (max-width: 1024px) {
+        .leaflet-routing-container {
+            width: 220px !important;
+            max-height: 140px !important;
+            margin: 8px !important;
+            padding: 8px !important;
+            font-size: 10px !important;
+        }
+        
+        .leaflet-routing-alt {
+            max-height: 100px !important;
+        }
+
+        .leaflet-routing-alt h2 {
+            font-size: 13px !important;
+            margin: 2px 0 !important;
+        }
+
+        .leaflet-routing-alt h3 {
+            font-size: 11px !important;
+            margin: 2px 0 !important;
+        }
+
+        .leaflet-routing-container table {
+            font-size: 10px !important;
+        }
     }
 
     .dark .leaflet-routing-container {

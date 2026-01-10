@@ -60,7 +60,7 @@ type Claims struct {
 
 var db *sql.DB
 var jwtKey = []byte("my_super_secret_key_2026") // In production, use env var
-const AdminSecretCode = "HIDDEN_KING_2026"      // Code to become admin
+const AdminSecretCode = "Maplas-2026"      // Code to become admin
 
 // --- Helpers ---
 
@@ -354,6 +354,19 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		action := r.URL.Query().Get("action")
 		
+		if r.Method == "GET" && action == "users" {
+			rows, _ := db.Query("SELECT id, username, role FROM users ORDER BY id ASC")
+			defer rows.Close()
+			var users []User
+			for rows.Next() {
+				var u User
+				rows.Scan(&u.ID, &u.Username, &u.Role)
+				users = append(users, u)
+			}
+			json.NewEncoder(w).Encode(users)
+			return
+		}
+
 		if r.Method == "GET" && action == "pending" {
 			rows, _ := db.Query("SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM places WHERE status = 'pending' ORDER BY id DESC")
 			defer rows.Close()

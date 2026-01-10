@@ -134,7 +134,7 @@ function handleSubmit() {
 
 <template>
   <div class="fixed inset-0 w-full h-full bg-black/60 flex justify-center items-center z-[2000] backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="bg-white dark:bg-zinc-800 p-6 rounded-2xl w-full max-w-[500px] max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-white transition-colors duration-300">
+    <div class="bg-white dark:bg-zinc-800 p-6 rounded-2xl w-[90%] max-w-[500px] max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-white transition-colors duration-300">
       <div class="flex justify-between items-center mb-5">
         <h3 class="m-0 text-xl font-semibold">{{ initialData ? 'Yeri Düzenle' : 'Yeni Yer Ekle' }}</h3>
         <button class="bg-transparent border-none text-slate-400 hover:text-slate-600 dark:text-zinc-400 dark:hover:text-zinc-200 cursor-pointer text-xl" @click="$emit('close')">✕</button>

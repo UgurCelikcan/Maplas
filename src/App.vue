@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, provide, watch, onMounted } from 'vue';
-import axios from 'axios';
+import api from './api';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
 import AddPlaceModal from './components/AddPlaceModal.vue';
@@ -34,19 +34,11 @@ const showAdminDashboard = ref(false);
 const currentUser = ref<User | null>(null);
 const commentPlace = ref<{id: number, name: string} | null>(null);
 const editingPlace = ref<Place | undefined>(undefined);
-
-// Axios Interceptor for Authorization Token
-axios.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+const isSidebarOpen = ref(false);
 
 const fetchPlaces = async () => {
   try {
-    const response = await axios.get<Place[]>('http://localhost:8080/api/places');
+    const response = await api.get<Place[]>('/places');
     if (response.data) {
         places.value = response.data;
     }
@@ -83,8 +75,6 @@ function handleLogout() {
 }
 
 function openAddModal() {
-    // Optional: Require login to add places? For now, allowing public add (pending approval)
-    // If we wanted to restrict: if (!currentUser.value) return showAuthModal.value = true;
     editingPlace.value = undefined;
     showModal.value = true;
 }
@@ -97,7 +87,7 @@ function openEditModal(place: Place) {
 async function handleSavePlace(placeData: Place) {
   try {
     if (placeData.id) {
-        const response = await axios.put<Place>('http://localhost:8080/api/places', placeData);
+        const response = await api.put<Place>('/places', placeData);
         if (response.status === 200) {
             const index = places.value.findIndex(p => p.id === placeData.id);
             if (index !== -1) {
@@ -105,7 +95,7 @@ async function handleSavePlace(placeData: Place) {
             }
         }
     } else {
-        const response = await axios.post<Place>('http://localhost:8080/api/places', placeData);
+        const response = await api.post<Place>('/places', placeData);
         if (response.status === 201) {
              alert('Yer eklendi ve yönetici onayına gönderildi.');
         }
@@ -121,7 +111,7 @@ async function handleDeletePlace(id: number) {
   if (!confirm('Bu yeri silmek istediğinize emin misiniz?')) return;
 
   try {
-    await axios.delete(`http://localhost:8080/api/places?id=${id}`);
+    await api.delete(`/places?id=${id}`);
     places.value = places.value.filter(p => p.id !== id);
     if (selectedPlaceId.value === id) {
         selectedPlaceId.value = null;
@@ -164,11 +154,21 @@ watch(isDarkMode, (newVal) => {
 </script>
 
 <template>
-  <div class="flex w-screen h-screen overflow-hidden bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-white transition-colors duration-300">
+  <div class="flex w-screen h-screen overflow-hidden bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-white transition-colors duration-300 relative">
+    
+    <!-- Mobile Menu Toggle Button -->
+    <button 
+        class="absolute top-4 left-4 z-[999] md:hidden w-11 h-11 flex items-center justify-center bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 rounded-lg text-2xl shadow-lg cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-zinc-700" 
+        @click="isSidebarOpen = true"
+    >
+        ☰
+    </button>
+
     <PlaceList 
       :places="places" 
       :selected-place-id="selectedPlaceId"
       :current-user="currentUser"
+      :is-open="isSidebarOpen"
       @select-place="handleSelectPlace"
       @toggle-theme="toggleTheme"
       @add-click="openAddModal"
@@ -177,6 +177,7 @@ watch(isDarkMode, (newVal) => {
       @open-auth="showAuthModal = true"
       @logout="handleLogout"
       @open-admin="showAdminDashboard = true"
+      @close-sidebar="isSidebarOpen = false"
     />
     <MapDisplay 
       :places="places" 
@@ -184,6 +185,7 @@ watch(isDarkMode, (newVal) => {
       @select-place="handleSelectPlace"
       @view-comments="handleViewComments"
     />
+
 
     <!-- Modals -->
     <AddPlaceModal 

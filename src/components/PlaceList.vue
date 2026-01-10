@@ -16,6 +16,7 @@ const props = defineProps<{
   places: Place[];
   selectedPlaceId: number | null;
   currentUser: { username: string, role: string } | null;
+  isOpen: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   (e: 'open-auth'): void;
   (e: 'logout'): void;
   (e: 'open-admin'): void;
+  (e: 'close-sidebar'): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
@@ -51,6 +53,10 @@ const filteredPlaces = computed(() => {
 
 function onSelect(id: number) {
   emit('select-place', id);
+  // On mobile, close sidebar after selection to show map
+  if (window.innerWidth < 768) {
+      emit('close-sidebar');
+  }
 }
 
 function getCategoryEmoji(category: string) {
@@ -68,7 +74,10 @@ function getCategoryEmoji(category: string) {
 </script>
 
 <template>
-  <div class="w-[420px] bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 flex flex-col h-full border-r border-slate-200 dark:border-zinc-800 shadow-xl z-50 transition-colors duration-300">
+  <div 
+    class="fixed inset-y-0 left-0 w-full md:w-[420px] md:relative bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 flex flex-col h-full border-r border-slate-200 dark:border-zinc-800 shadow-xl z-[1000] transition-transform duration-300 transform"
+    :class="isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+  >
     <div class="p-6 bg-slate-50 dark:bg-zinc-800 border-b border-slate-200 dark:border-zinc-700 transition-colors duration-300">
       
       <!-- Top Bar: Logo & User Actions -->
@@ -82,6 +91,11 @@ function getCategoryEmoji(category: string) {
         </div>
         
         <div class="flex gap-2 relative">
+             <!-- Mobile Close Button -->
+             <button class="md:hidden w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-white cursor-pointer transition-colors" @click="$emit('close-sidebar')">
+                ✕
+            </button>
+
             <button class="w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-white cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:border-emerald-500" @click="$emit('toggle-theme')" :title="isDarkMode ? 'Aydınlık Mod' : 'Karanlık Mod'">
                 {{ isDarkMode ? '☀️' : '🌙' }}
             </button>
@@ -109,7 +123,6 @@ function getCategoryEmoji(category: string) {
                     </button>
                 </div>
             </div>
-            <!-- Click outside handler could be added here for perfection -->
         </div>
       </div>
       

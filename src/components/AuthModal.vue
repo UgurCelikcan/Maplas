@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import axios from 'axios';
+import api from '../api';
 
 const emit = defineEmits<{
   (e: 'login-success', user: any, token: string): void;
@@ -19,14 +19,14 @@ async function handleSubmit() {
   loading.value = true;
   
   try {
-    const endpoint = mode.value === 'login' ? '/api/login' : '/api/register';
+    const endpoint = mode.value === 'login' ? '/login' : '/register';
     const payload = {
         username: username.value,
         password: password.value,
         ...(mode.value === 'register' ? { secret_code: secretCode.value } : {})
     };
 
-    const response = await axios.post(`http://localhost:8080${endpoint}`, payload);
+    const response = await api.post(endpoint, payload);
     
     if (mode.value === 'login') {
         // Login successful
@@ -54,7 +54,7 @@ async function handleSubmit() {
 
 <template>
   <div class="fixed inset-0 w-full h-full bg-black/70 flex justify-center items-center z-[2100] backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="bg-white dark:bg-zinc-800 p-8 rounded-2xl w-full max-w-[400px] shadow-2xl border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-white transition-colors duration-300">
+    <div class="bg-white dark:bg-zinc-800 p-6 rounded-2xl w-[90%] max-w-[400px] max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-white transition-colors duration-300">
       
       <!-- Tabs -->
       <div class="flex mb-6 border-b border-slate-200 dark:border-zinc-700">
