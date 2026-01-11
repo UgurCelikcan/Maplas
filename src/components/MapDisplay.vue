@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, watch, shallowRef, inject } from 'vue';
+import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 
+const { t } = useI18n();
+
 interface Place {
-  id: number;
+  id?: number;
   name: string;
   description: string;
   lat: number;
@@ -103,18 +106,18 @@ async function locateUser() {
                     iconSize: [20, 20]
                 })
             }).addTo(map.value!);
-            userMarker.value.bindPopup("Konumunuz");
+            userMarker.value.bindPopup(t('map.your_location'));
         }
     });
 
     map.value.once('locationerror', () => {
-        alert("Konumunuz alınamadı. Lütfen izinleri kontrol edin.");
+        alert(t('map.location_not_found'));
     });
 }
 
 function drawRoute(toLat: number, toLng: number) {
     if (!map.value || !userLocation.value) {
-        alert("Lütfen önce konumunuzu belirleyin.");
+        alert(t('map.select_location_first'));
         locateUser();
         return;
     }
@@ -157,7 +160,7 @@ function drawRoute(toLat: number, toLng: number) {
             const totalMinutes = Math.round(summary.totalTime / 60);
             const hours = Math.floor(totalMinutes / 60);
             const mins = totalMinutes % 60;
-            const timeStr = hours > 0 ? `${hours} sa ${mins} dk` : `${mins} dk`;
+            const timeStr = hours > 0 ? `${hours} ${t('map.hours')} ${mins} ${t('map.minutes')}` : `${mins} ${t('map.minutes')}`;
 
             // Format distance
             const distKm = (summary.totalDistance / 1000).toFixed(1);
@@ -185,14 +188,14 @@ function drawRoute(toLat: number, toLng: number) {
                 }, []); // Remove consecutive duplicates
 
             routeInfo.value = {
-                roads: roads.length > 0 ? roads : ['Ana Yollar / Şehir İçi'],
+                roads: roads.length > 0 ? roads : [t('map.main_roads')],
                 totalDistance: `${distKm} km`,
                 totalTime: timeStr
             };
         });
         
         control.on('routingerror', function() {
-            alert('Rota bulunamadı.');
+            alert(t('map.route_not_found'));
             routeInfo.value = null;
         });
     }
@@ -280,6 +283,12 @@ watch(() => props.selectedPlaceId, (newId, oldId) => {
       const marker = markersMap.value.get(newId);
       if (place && marker) {
         marker.setIcon(createCustomIcon(place.category, true));
+        
+        // Fly to the location for a smooth zoom effect
+        map.value.flyTo([place.lat, place.lng], 15, {
+            duration: 1.5
+        });
+
         markerClusterGroup.value.zoomToShowLayer(marker, () => {
             marker.openPopup();
         });
@@ -312,16 +321,16 @@ function updateMarkers() {
         <div class="custom-popup">
             ${imageHtml}
             <div class="popup-header">
-                <span class="popup-category">${getCategoryEmoji(place.category)} ${place.category}</span>
+                <span class="popup-category">${getCategoryEmoji(place.category)} ${t(`categories.${place.category}`)}</span>
                 <span class="popup-city">📍 ${place.city}</span>
             </div>
             <h3>${place.name}</h3>
             <p>${place.description}</p>
             <button class="btn-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-slate-900 border-none py-2 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}">
-                🚗 Yol Tarifi Al
+                🚗 ${t('map.get_directions')}
             </button>
             <button class="btn-comments w-full mt-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white border-none py-2 px-3 rounded-lg font-medium cursor-pointer transition-colors flex items-center justify-center gap-2" data-id="${place.id}">
-                💬 Yorumlar & Puan Ver
+                💬 ${t('map.view_comments')}
             </button>
         </div>
     `;
@@ -333,7 +342,7 @@ function updateMarkers() {
     
     marker.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
-        emit('select-place', place.id);
+        emit('select-place', place.id as number);
     });
 
     if (markerClusterGroup.value) {
@@ -342,7 +351,7 @@ function updateMarkers() {
         marker.addTo(map.value!);
     }
     
-    markersMap.value.set(place.id, marker);
+    markersMap.value.set(place.id as number, marker);
   });
 }
 </script>
@@ -350,7 +359,7 @@ function updateMarkers() {
 <template>
   <div class="relative w-full h-full flex-grow">
     <div ref="mapContainer" class="w-full h-full z-0"></div>
-    <button class="absolute bottom-5 right-[60px] z-[999] w-11 h-11 bg-emerald-500 border-none rounded-full text-2xl cursor-pointer shadow-lg flex items-center justify-center transition-all hover:scale-110 hover:bg-emerald-600" @click="locateUser" title="Konumumu Bul">
+    <button class="absolute bottom-5 right-[60px] z-[999] w-11 h-11 bg-emerald-500 border-none rounded-full text-2xl cursor-pointer shadow-lg flex items-center justify-center transition-all hover:scale-110 hover:bg-emerald-600" @click="locateUser" :title="t('map.locate_me')">
         📍
     </button>
     
@@ -372,7 +381,7 @@ function updateMarkers() {
         </div>
         
         <div class="mt-3 pt-2 border-t border-slate-100 dark:border-zinc-700 text-xs text-center text-slate-400">
-            Güzergah üzerindeki ana yollar
+            {{ t('map.route_summary') }}
         </div>
     </div>
   </div>

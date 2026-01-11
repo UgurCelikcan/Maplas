@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, provide, watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from './api';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
@@ -7,9 +8,12 @@ import AddPlaceModal from './components/AddPlaceModal.vue';
 import CommentsModal from './components/CommentsModal.vue';
 import AuthModal from './components/AuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
+import AboutModal from './components/AboutModal.vue';
+
+const { t } = useI18n();
 
 interface Place {
-  id: number;
+  id?: number;
   name: string;
   description: string;
   lat: number;
@@ -31,6 +35,7 @@ const showModal = ref(false);
 const showCommentsModal = ref(false);
 const showAuthModal = ref(false);
 const showAdminDashboard = ref(false);
+const showAboutModal = ref(false);
 const currentUser = ref<User | null>(null);
 const commentPlace = ref<{id: number, name: string} | null>(null);
 const editingPlace = ref<Place | undefined>(undefined);
@@ -97,18 +102,18 @@ async function handleSavePlace(placeData: Place) {
     } else {
         const response = await api.post<Place>('/places', placeData);
         if (response.status === 201) {
-             alert('Yer eklendi ve yönetici onayına gönderildi.');
+             alert(t('place.pending_approval'));
         }
     }
     showModal.value = false;
   } catch (error) {
     console.error('Error saving place:', error);
-    alert('İşlem sırasında bir hata oluştu.');
+    alert(t('place.save_error'));
   }
 }
 
 async function handleDeletePlace(id: number) {
-  if (!confirm('Bu yeri silmek istediğinize emin misiniz?')) return;
+  if (!confirm(t('place.delete_confirm'))) return;
 
   try {
     await api.delete(`/places?id=${id}`);
@@ -119,9 +124,9 @@ async function handleDeletePlace(id: number) {
   } catch (error: any) {
     console.error('Error deleting place:', error);
     if (error.response && error.response.status === 403) {
-        alert('Bu işlem için yetkiniz yok.');
+        alert(t('place.no_permission'));
     } else {
-        alert('Yer silinirken bir hata oluştu.');
+        alert(t('place.delete_error'));
     }
   }
 }
@@ -133,7 +138,7 @@ function handleSelectPlace(id: number) {
 function handleViewComments(id: number) {
   const place = places.value.find(p => p.id === id);
   if (place) {
-    commentPlace.value = { id: place.id, name: place.name };
+    commentPlace.value = { id: place.id as number, name: place.name };
     showCommentsModal.value = true;
   }
 }
@@ -178,6 +183,7 @@ watch(isDarkMode, (newVal) => {
       @logout="handleLogout"
       @open-admin="showAdminDashboard = true"
       @close-sidebar="isSidebarOpen = false"
+      @open-about="showAboutModal = true"
     />
     <MapDisplay 
       :places="places" 
@@ -212,6 +218,11 @@ watch(isDarkMode, (newVal) => {
       v-if="showAdminDashboard"
       @close="showAdminDashboard = false"
       @place-approved="fetchPlaces"
+    />
+
+    <AboutModal
+      v-if="showAboutModal"
+      @close="showAboutModal = false"
     />
   </div>
 </template>

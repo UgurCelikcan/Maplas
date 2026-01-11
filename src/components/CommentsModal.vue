@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import axios from 'axios';
+
+const { t, locale } = useI18n();
 
 interface Comment {
   id: number;
@@ -54,14 +57,15 @@ const submitComment = async () => {
     }
   } catch (error) {
     console.error('Error saving comment:', error);
-    alert('Yorum kaydedilemedi.');
+    alert(t('comments.error_save'));
   } finally {
     isLoading.value = false;
   }
 };
 
 const formatDate = (dateStr: string) => {
-  return new Date(dateStr).toLocaleDateString('tr-TR', {
+  const loc = locale.value === 'el' ? 'el-GR' : (locale.value === 'en' ? 'en-US' : 'tr-TR');
+  return new Date(dateStr).toLocaleDateString(loc, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -83,7 +87,7 @@ onMounted(() => {
       <div class="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
         <div>
             <h2 class="text-xl font-bold text-slate-800 dark:text-white">{{ placeName }}</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400">Yorumlar ve Puanlar</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ t('comments.title') }}</p>
         </div>
         <button @click="emit('close')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500">
           ✕
@@ -96,11 +100,11 @@ onMounted(() => {
         <!-- Add Comment Form -->
         <div class="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
-                ✍️ Deneyimini Paylaş
+                ✍️ {{ t('comments.share_experience') }}
             </h3>
             
             <div class="flex items-center gap-2 mb-3">
-                <span class="text-sm text-slate-600 dark:text-slate-400">Puanın:</span>
+                <span class="text-sm text-slate-600 dark:text-slate-400">{{ t('comments.your_rating') }}</span>
                 <div class="flex gap-1">
                     <button v-for="star in 5" :key="star" 
                         @click="newRating = star"
@@ -114,7 +118,7 @@ onMounted(() => {
 
             <textarea 
                 v-model="newComment"
-                placeholder="Burayı nasıl buldun? Düşüncelerini yaz..." 
+                :placeholder="t('comments.placeholder')" 
                 class="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none text-sm resize-none h-24"
             ></textarea>
             
@@ -123,14 +127,14 @@ onMounted(() => {
                 :disabled="isLoading || !newComment.trim()"
                 class="w-full mt-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg font-medium transition-colors"
             >
-                {{ isLoading ? 'Kaydediliyor...' : 'Yorumu Gönder' }}
+                {{ isLoading ? t('comments.saving') : t('comments.submit') }}
             </button>
         </div>
 
         <!-- Comments List -->
         <div class="space-y-4">
             <div v-if="comments.length === 0" class="text-center py-8 text-slate-400">
-                Henüz yorum yapılmamış. İlk yorumu sen yap! 🚀
+                {{ t('comments.no_comments') }}
             </div>
 
             <div v-for="comment in comments" :key="comment.id" class="border-b border-slate-100 dark:border-slate-700/50 pb-4 last:border-0">

@@ -132,6 +132,20 @@ func initDB() {
 		log.Fatalf("Failed to create tables: %v", err)
 	}
 	
+	// Migration: Revert JSONB to TEXT if needed (rollback from previous attempt)
+	var nameType string
+	err = db.QueryRow("SELECT data_type FROM information_schema.columns WHERE table_name = 'places' AND column_name = 'name'").Scan(&nameType)
+	if err == nil && nameType == "jsonb" {
+		log.Println("Reverting JSONB columns back to TEXT...")
+		_, err = db.Exec(`
+			ALTER TABLE places ALTER COLUMN name TYPE TEXT USING COALESCE(name->>'tr', name->>'en', name->>'el', '');
+			ALTER TABLE places ALTER COLUMN description TYPE TEXT USING COALESCE(description->>'tr', description->>'en', description->>'el', '');
+		`)
+		if err != nil {
+			log.Printf("Migration rollback error: %v", err)
+		}
+	}
+
 	// Ensure status column exists (migration)
 	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
 }
