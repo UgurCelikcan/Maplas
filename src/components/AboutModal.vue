@@ -29,18 +29,24 @@ defineEmits<{
 
         <div class="w-full h-[1px] bg-slate-100 dark:bg-zinc-700 my-2"></div>
 
-        <div class="flex flex-col items-center gap-3 w-full">
+        <div class="flex flex-col items-center gap-1 w-full">
           <h3 class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider m-0">{{ t('about.developer') }}</h3>
           
-          <!-- LinkedIn Badge Container -->
-          <div class="badge-base LI-profile-badge" 
+          <a href="https://tr.linkedin.com/in/ugur-andac" 
+             target="_blank" 
+             rel="noopener noreferrer" 
+             class="text-base font-medium text-slate-900 dark:text-white no-underline hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors">
+             Uğur Andaç
+          </a>
+
+          <!-- LinkedIn Badge Container (Hidden or kept for script) -->
+          <div class="badge-base LI-profile-badge opacity-0 absolute pointer-events-none" 
                data-locale="en_US" 
                data-size="medium" 
                data-theme="light" 
                data-type="VERTICAL" 
                data-vanity="ugur-andac" 
                data-version="v1">
-               <a class="badge-base__link LI-simple-link" href="https://tr.linkedin.com/in/ugur-andac?trk=profile-badge">Uğur Andac</a>
           </div>
         </div>
 

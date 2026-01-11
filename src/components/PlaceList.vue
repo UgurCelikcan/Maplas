@@ -31,14 +31,17 @@ const emit = defineEmits<{
   (e: 'open-auth'): void;
   (e: 'logout'): void;
   (e: 'open-admin'): void;
+  (e: 'open-profile'): void;
   (e: 'close-sidebar'): void;
   (e: 'open-about'): void;
+  (e: 'search-nearby'): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
 
 const searchQuery = ref('');
-const selectedCategory = ref('all');
+const selectedCategories = ref<string[]>([]);
+const selectedCity = ref<string>('');
 
 const showProfileMenu = ref(false);
 const showLangMenu = ref(false);
@@ -46,7 +49,17 @@ const showLangMenu = ref(false);
 const languages = [
     { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
     { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'el', name: 'Ελληνικά', flag: '🇬🇷' }
+    { code: 'el', name: 'Ελληνικά', flag: '🇬🇷' },
+    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'it', name: 'Italiano', flag: '🇮🇹' },
+    { code: 'pt', name: 'Português', flag: '🇵🇹' },
+    { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+    { code: 'ja', name: '日本語', flag: '🇯🇵' },
+    { code: 'zh-CN', name: '简体中文', flag: '🇨🇳' },
+    { code: 'ko', name: '한국어', flag: '🇰🇷' },
+    { code: 'ar', name: 'العربية', flag: '🇸🇦' }
 ];
 
 function changeLanguage(code: string) {
@@ -57,17 +70,34 @@ function changeLanguage(code: string) {
 
 const categories = computed(() => {
   const uniqueCategories = new Set(props.places.map(p => p.category));
-  return ['all', ...Array.from(uniqueCategories)];
+  return Array.from(uniqueCategories);
+});
+
+const cities = computed(() => {
+  const uniqueCities = new Set(props.places.map(p => p.city));
+  return Array.from(uniqueCities).sort();
 });
 
 const filteredPlaces = computed(() => {
   return props.places.filter(place => {
     const matchesSearch = place.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                           place.city.toLowerCase().includes(searchQuery.value.toLowerCase());
-    const matchesCategory = selectedCategory.value === 'all' || place.category === selectedCategory.value;
-    return matchesSearch && matchesCategory;
+    
+    const matchesCategory = selectedCategories.value.length === 0 || selectedCategories.value.includes(place.category);
+    
+    const matchesCity = selectedCity.value === '' || place.city === selectedCity.value;
+
+    return matchesSearch && matchesCategory && matchesCity;
   });
 });
+
+function toggleCategory(cat: string) {
+  if (selectedCategories.value.includes(cat)) {
+    selectedCategories.value = selectedCategories.value.filter(c => c !== cat);
+  } else {
+    selectedCategories.value.push(cat);
+  }
+}
 
 function onSelect(id: number) {
   emit('select-place', id);
@@ -119,9 +149,9 @@ function getCategoryEmoji(category: string) {
                 <button class="w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-lg cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-white/10" @click="showLangMenu = !showLangMenu" :title="locale === 'tr' ? 'Dil Seç' : 'Select Language'">
                     {{ languages.find(l => l.code === locale)?.flag }}
                 </button>
-                <div v-if="showLangMenu" class="absolute right-0 top-12 w-32 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl shadow-xl z-[100] overflow-hidden flex flex-col">
-                    <button v-for="lang in languages" :key="lang.code" @click="changeLanguage(lang.code)" class="px-4 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2">
-                        <span>{{ lang.flag }}</span> {{ lang.name }}
+                <div v-if="showLangMenu" class="absolute right-0 top-12 w-40 max-h-[300px] overflow-y-auto bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl shadow-xl z-[100] flex flex-col scrollbar-thin">
+                    <button v-for="lang in languages" :key="lang.code" @click="changeLanguage(lang.code)" class="px-4 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2 flex-shrink-0">
+                        <span class="text-lg">{{ lang.flag }}</span> <span>{{ lang.name }}</span>
                     </button>
                 </div>
             </div>
@@ -152,6 +182,9 @@ function getCategoryEmoji(category: string) {
                     <button v-if="currentUser.role === 'admin'" @click="$emit('open-admin')" class="text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2">
                         🛡️ {{ t('ui.admin_panel') }}
                     </button>
+                    <button @click="$emit('open-profile')" class="text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2">
+                        👤 {{ t('profile.title', 'Profilim') }}
+                    </button>
                     <button @click="$emit('logout')" class="text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2">
                         🚪 {{ t('ui.logout') }}
                     </button>
@@ -160,34 +193,52 @@ function getCategoryEmoji(category: string) {
         </div>
       </div>
       
-      <div class="flex flex-col gap-4">
-        <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-50 text-sm">🔍</span>
-            <input 
-            v-model="searchQuery" 
-            type="text" 
-            :placeholder="t('ui.search_placeholder')" 
-            class="w-full py-3 pl-10 pr-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm transition-all outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-            />
+      <div class="flex flex-col gap-3">
+        <div class="flex gap-2">
+            <div class="relative flex-grow">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-50 text-sm">🔍</span>
+                <input 
+                v-model="searchQuery" 
+                type="text" 
+                :placeholder="t('ui.search_placeholder')" 
+                class="w-full py-2.5 pl-9 pr-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm transition-all outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                />
+            </div>
+            
+            <div class="relative w-1/3 min-w-[120px]">
+                <select 
+                    v-model="selectedCity" 
+                    class="w-full h-full py-2.5 px-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm appearance-none outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+                >
+                    <option value="">{{ t('common.all_cities', 'Tüm Şehirler') }}</option>
+                    <option v-for="city in cities" :key="city" :value="city">{{ city }}</option>
+                </select>
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 text-xs">▼</span>
+            </div>
+
+            <button class="w-11 h-11 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-700 dark:text-emerald-300 cursor-pointer transition-colors hover:bg-emerald-200 dark:hover:bg-emerald-800 flex-shrink-0" @click="$emit('search-nearby')" :title="t('map.locate_me')">
+                📍
+            </button>
         </div>
         
-        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <button class="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold whitespace-nowrap hover:bg-emerald-500/20 transition-colors cursor-pointer" @click="$emit('add-click')">
+        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide items-center">
+            <button class="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold whitespace-nowrap hover:bg-emerald-500/20 transition-colors cursor-pointer flex-shrink-0" @click="$emit('add-click')">
                 + {{ t('ui.add_new') }}
             </button>
-            <div class="w-[1px] bg-slate-300 dark:bg-zinc-700 mx-1 h-8 self-center"></div>
+            <div class="w-[1px] bg-slate-300 dark:bg-zinc-700 mx-1 h-6 self-center flex-shrink-0"></div>
+            
             <button 
                 v-for="cat in categories" 
                 :key="cat"
-                class="px-4 py-2 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all"
+                class="px-3 py-1.5 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all flex-shrink-0 select-none"
                 :class="[
-                selectedCategory === cat 
-                    ? 'bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-500/30' 
-                    : 'bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-600 hover:text-slate-900 dark:hover:text-white'
+                selectedCategories.includes(cat) 
+                    ? 'bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-500/50 ring-offset-1 dark:ring-offset-zinc-800' 
+                    : 'bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-600'
                 ]"
-                @click="selectedCategory = cat"
+                @click="toggleCategory(cat)"
             >
-                {{ cat === 'all' ? t('common.all') : t(`categories.${cat}`) }}
+                {{ t(`categories.${cat}`) }}
             </button>
         </div>
       </div>
@@ -233,7 +284,7 @@ function getCategoryEmoji(category: string) {
       </ul>
       <div v-else class="py-16 px-5 text-center text-slate-500 dark:text-zinc-500">
         <p>{{ t('ui.no_results') }}</p>
-        <button class="mt-4 bg-transparent border border-slate-400 dark:border-zinc-600 text-slate-500 dark:text-zinc-500 px-4 py-2 rounded-lg cursor-pointer hover:border-slate-600 dark:hover:border-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors" @click="searchQuery = ''; selectedCategory = 'all'">{{ t('ui.clear_filters') }}</button>
+        <button class="mt-4 bg-transparent border border-slate-400 dark:border-zinc-600 text-slate-500 dark:text-zinc-500 px-4 py-2 rounded-lg cursor-pointer hover:border-slate-600 dark:hover:border-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors" @click="searchQuery = ''; selectedCategories = []; selectedCity = ''">{{ t('ui.clear_filters') }}</button>
       </div>
     </div>
   </div>

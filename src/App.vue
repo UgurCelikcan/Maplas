@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, provide, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import api from './api';
+import api, { getNearbyPlaces } from './api';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
 import AddPlaceModal from './components/AddPlaceModal.vue';
@@ -9,6 +9,7 @@ import CommentsModal from './components/CommentsModal.vue';
 import AuthModal from './components/AuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
 import AboutModal from './components/AboutModal.vue';
+import UserProfile from './components/UserProfile.vue';
 
 const { t } = useI18n();
 
@@ -36,6 +37,7 @@ const showCommentsModal = ref(false);
 const showAuthModal = ref(false);
 const showAdminDashboard = ref(false);
 const showAboutModal = ref(false);
+const showProfileModal = ref(false);
 const currentUser = ref<User | null>(null);
 const commentPlace = ref<{id: number, name: string} | null>(null);
 const editingPlace = ref<Place | undefined>(undefined);
@@ -143,6 +145,35 @@ function handleViewComments(id: number) {
   }
 }
 
+async function handleNearbySearch() {
+    if (!navigator.geolocation) {
+        alert(t('map.location_not_found'));
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+            const { latitude, longitude } = pos.coords;
+            const nearbyPlaces = await getNearbyPlaces(latitude, longitude, 10); // 10km radius
+            places.value = nearbyPlaces || [];
+            
+            if (places.value.length === 0) {
+                alert(t('ui.no_results'));
+            } else {
+                // Optionally fly to user location on map if we could access map instance here, 
+                // but MapDisplay handles its own user location logic.
+                // We could emit an event to MapDisplay via a prop change or ref, but let's keep it simple.
+            }
+        } catch (error) {
+            console.error('Error searching nearby:', error);
+            alert(t('common.error'));
+        }
+    }, (err) => {
+        console.error('Geolocation error:', err);
+        alert(t('map.location_not_found'));
+    });
+}
+
 function toggleTheme() {
   isDarkMode.value = !isDarkMode.value;
 }
@@ -182,8 +213,10 @@ watch(isDarkMode, (newVal) => {
       @open-auth="showAuthModal = true"
       @logout="handleLogout"
       @open-admin="showAdminDashboard = true"
+      @open-profile="showProfileModal = true"
       @close-sidebar="isSidebarOpen = false"
       @open-about="showAboutModal = true"
+      @search-nearby="handleNearbySearch"
     />
     <MapDisplay 
       :places="places" 
@@ -194,6 +227,11 @@ watch(isDarkMode, (newVal) => {
 
 
     <!-- Modals -->
+    <UserProfile
+      v-if="showProfileModal"
+      @close="showProfileModal = false"
+    />
+
     <AddPlaceModal 
       v-if="showModal" 
       :initial-data="editingPlace"

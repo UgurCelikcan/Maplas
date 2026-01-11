@@ -2,6 +2,7 @@
 import { ref, onMounted, shallowRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
+import { uploadImage } from '../api';
 
 const { t } = useI18n();
 
@@ -40,6 +41,7 @@ const map = shallowRef<L.Map | null>(null);
 const marker = shallowRef<L.Marker | null>(null);
 const searchQuery = ref('');
 const isSearching = ref(false);
+const isUploading = ref(false);
 
 onMounted(() => {
   if (props.initialData) {
@@ -107,21 +109,38 @@ async function searchLocation() {
             const lat = parseFloat(result.lat);
             const lng = parseFloat(result.lon);
             updateLocation(lat, lng, true);
-            
-            // Auto fill city if empty and available in address (simplified)
-            // Note: Nominatim display_name is complex, this is just a helper logic
-            if (!form.value.city && result.display_name) {
-               // Usually city is near the end or middle, hard to guess perfectly without 'addressdetails=1'
-               // Let's just update the view for now.
-            }
         } else {
-            alert(t('map.route_not_found')); // Reusing or should I add location_not_found?
+            alert(t('map.route_not_found'));
         }
     } catch (error) {
         console.error('Search error:', error);
         alert(t('place.save_error'));
     } finally {
         isSearching.value = false;
+    }
+}
+
+async function handleFileChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (target.files && target.files.length > 0) {
+        const file = target.files[0];
+        
+        // Basic validation
+        if (file.size > 10 * 1024 * 1024) { // 10MB limit
+            alert('File too large (Max 10MB)');
+            return;
+        }
+
+        isUploading.value = true;
+        try {
+            const url = await uploadImage(file);
+            form.value.imageUrl = url;
+        } catch (error) {
+            console.error('Upload failed:', error);
+            alert(t('place.save_error'));
+        } finally {
+            isUploading.value = false;
+        }
     }
 }
 
@@ -143,7 +162,7 @@ function handleSubmit() {
       </div>
       
       <form @submit.prevent="handleSubmit" class="flex flex-col gap-4">
-        <!-- Location Picker Section (Moved to top for importance) -->
+        <!-- Location Picker Section -->
         <div class="flex flex-col gap-2">
             <label class="text-sm font-medium text-slate-500 dark:text-zinc-400">{{ t('place.select_location') }}</label>
             <div class="flex gap-2">
@@ -191,10 +210,22 @@ function handleSubmit() {
             </div>
         </div>
 
+        <!-- Image Upload Section -->
         <div class="flex flex-col gap-1.5">
           <label class="text-sm font-medium text-slate-500 dark:text-zinc-400">{{ t('place.image_url') }}</label>
-          <input v-model="form.imageUrl" placeholder="https://example.com/image.jpg" 
-                 class="p-2.5 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors" />
+          
+          <div class="flex items-center gap-2">
+               <input type="file" accept="image/*" @change="handleFileChange" class="hidden" id="file-upload" />
+               <label for="file-upload" class="cursor-pointer px-4 py-2.5 bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-zinc-600 transition-colors flex-grow text-center border border-slate-200 dark:border-zinc-600">
+                    {{ isUploading ? t('common.loading') : (form.imageUrl ? '📸 ' + t('common.update') : '📷 ' + t('ui.add_new')) }}
+               </label>
+          </div>
+
+          <!-- Preview -->
+          <div v-if="form.imageUrl" class="relative mt-2 w-full h-32 rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-black/20 group">
+              <img :src="form.imageUrl" class="w-full h-full object-cover" />
+              <button type="button" @click="form.imageUrl = ''" class="absolute top-2 right-2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">✕</button>
+          </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -205,7 +236,7 @@ function handleSubmit() {
 
         <div class="flex justify-end gap-2.5 mt-2">
           <button type="button" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-zinc-700 bg-transparent text-slate-600 dark:text-zinc-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors" @click="$emit('close')">{{ t('common.cancel') }}</button>
-          <button type="submit" class="px-5 py-2 rounded-lg border-none bg-emerald-500 text-white font-semibold cursor-pointer hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20">{{ initialData ? t('common.update') : t('common.save') }}</button>
+          <button type="submit" :disabled="isUploading" class="px-5 py-2 rounded-lg border-none bg-emerald-500 text-white font-semibold cursor-pointer hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed">{{ initialData ? t('common.update') : t('common.save') }}</button>
         </div>
       </form>
     </div>

@@ -10,7 +10,8 @@
     "error": "Error",
     "success": "Success",
     "edit": "Edit",
-    "all": "All"
+    "all": "All",
+    "all_cities": "All Cities"
   },
   "map": {
     "locate_me": "Find My Location",

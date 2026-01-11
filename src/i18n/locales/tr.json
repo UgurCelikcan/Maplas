@@ -5,12 +5,13 @@
     "update": "Güncelle",
     "delete": "Sil",
     "close": "Kapat",
-    "search": "Bul",
+    "search": "Ara",
     "loading": "Yükleniyor...",
     "error": "Hata",
     "success": "Başarılı",
     "edit": "Düzenle",
-    "all": "Tümü"
+    "all": "Tümü",
+    "all_cities": "Tüm Şehirler"
   },
   "map": {
     "locate_me": "Konumumu Bul",

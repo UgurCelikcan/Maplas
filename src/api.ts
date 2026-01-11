@@ -1,10 +1,7 @@
 import axios from 'axios';
 
-// Get the current hostname (e.g., 'localhost' or '192.168.1.35')
-const hostname = window.location.hostname;
-
-// Backend is running on port 8080 on the same machine
-const API_BASE_URL = `http://${hostname}:8080/api`;
+// Use relative path to leverage Vite's proxy (works for both localhost and IP access)
+const API_BASE_URL = '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -18,5 +15,22 @@ api.interceptors.request.use(config => {
   }
   return config;
 });
+
+export const uploadImage = async (file: File) => {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await api.post('/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return response.data.url;
+};
+
+export const getNearbyPlaces = async (lat: number, lng: number, radiusKm: number = 10) => {
+    const response = await api.get<any[]>(`/places?lat=${lat}&lng=${lng}&radius=${radiusKm}`);
+    return response.data;
+};
 
 export default api;

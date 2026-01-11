@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,10 +40,13 @@ type Comment struct {
 }
 
 type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password,omitempty"` // omitempty to hide in responses
-	Role     string `json:"role"`
+	ID        int    `json:"id"`
+	Username  string `json:"username"`
+	Password  string `json:"password,omitempty"` // omitempty to hide in responses
+	Role      string `json:"role"`
+	Email     string `json:"email"`
+	Bio       string `json:"bio"`
+	AvatarURL string `json:"avatar_url"`
 }
 
 type Credentials struct {
@@ -148,6 +153,11 @@ func initDB() {
 
 	// Ensure status column exists (migration)
 	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
+
+	// Migration: Add user profile fields
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
 }
 
 func enableCors(w http.ResponseWriter) {
@@ -293,6 +303,63 @@ func adminOnly(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// --- File Upload Handler ---
+
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limit upload size to 10MB
+	r.ParseMultipartForm(10 << 20)
+
+	file, handler, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "Error retrieving file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Check file extension
+	ext := strings.ToLower(filepath.Ext(handler.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
+		http.Error(w, "Invalid file type", http.StatusBadRequest)
+		return
+	}
+
+	// Generate unique filename using timestamp
+	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+	filePath := filepath.Join("uploads", filename)
+
+	// Create destination file
+	dst, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Error saving file", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	// Copy file content
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, "Error saving file", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the file URL
+	// Note: We'll serve this via http.StripPrefix later
+	fileURL := fmt.Sprintf("/uploads/%s", filename)
+	
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"url": fileURL,
+	})
+}
+
 // --- Place Handlers ---
 
 func placesHandler(w http.ResponseWriter, r *http.Request) {
@@ -302,9 +369,35 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		rows, err := db.Query("SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM places WHERE status = 'approved' ORDER BY id DESC")
+		latStr := r.URL.Query().Get("lat")
+		lngStr := r.URL.Query().Get("lng")
+		radiusStr := r.URL.Query().Get("radius") // in km
+
+		query := "SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM places WHERE status = 'approved'"
+		args := []interface{}{}
+
+		if latStr != "" && lngStr != "" && radiusStr != "" {
+			// Haversine formula for radius search
+			// 6371 is Earth radius in km
+			query = `
+				SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status 
+				FROM (
+					SELECT *, 
+						(6371 * acos(cos(radians($1)) * cos(radians(lat)) * cos(radians(lng) - radians($2)) + sin(radians($1)) * sin(radians(lat)))) AS distance 
+					FROM places
+					WHERE status = 'approved'
+				) AS p
+				WHERE distance < $3
+				ORDER BY distance ASC
+			`
+			args = append(args, latStr, lngStr, radiusStr)
+		} else {
+			query += " ORDER BY id DESC"
+		}
+
+		rows, err := db.Query(query, args...)
 		if err != nil {
-			http.Error(w, "Database error", http.StatusInternalServerError)
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -435,13 +528,73 @@ func commentsHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	initDB()
 	
+	// Create uploads directory if not exists
+	os.MkdirAll("uploads", os.ModePerm)
+
+	// Serve static files from uploads directory
+	fs := http.FileServer(http.Dir("./uploads"))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+
+	http.HandleFunc("/api/upload", uploadHandler)
+
 	http.HandleFunc("/api/register", registerHandler)
 	http.HandleFunc("/api/login", loginHandler)
 	
 	http.HandleFunc("/api/places", placesHandler)
 	http.HandleFunc("/api/comments", commentsHandler)
 	http.HandleFunc("/api/admin", adminHandler)
+	http.HandleFunc("/api/user", userHandler)
 
 	fmt.Println("Server starting on port 8080...")
 	http.ListenAndServe(":8080", nil)
+}
+
+func userHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	// Verify token for all user operations
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Missing authorization header", http.StatusUnauthorized)
+		return
+	}
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := validateToken(tokenStr)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method == "GET" {
+		// Get current user profile
+		var u User
+		err := db.QueryRow("SELECT id, username, role, COALESCE(email, ''), COALESCE(bio, ''), COALESCE(avatar_url, '') FROM users WHERE username=$1", claims.Username).Scan(&u.ID, &u.Username, &u.Role, &u.Email, &u.Bio, &u.AvatarURL)
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(u)
+
+	} else if r.Method == "PUT" {
+		// Update user profile
+		var u User
+		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec("UPDATE users SET email=$1, bio=$2, avatar_url=$3 WHERE username=$4", u.Email, u.Bio, u.AvatarURL, claims.Username)
+		if err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		
+		// Return updated user
+		u.Username = claims.Username
+		u.Role = claims.Role // Keep existing role
+		json.NewEncoder(w).Encode(u)
+	}
 }
