@@ -53,7 +53,6 @@ onMounted(() => {
 
 function initMap() {
     if (mapContainer.value) {
-        // Default center (Turkey)
         const startLat = form.value.lat || 39.0;
         const startLng = form.value.lng || 35.0;
         const startZoom = form.value.lat ? 13 : 5;
@@ -64,17 +63,14 @@ function initMap() {
             attribution: '&copy; OpenStreetMap'
         }).addTo(map.value);
 
-        // Click handler to pick location
         map.value.on('click', (e: L.LeafletMouseEvent) => {
             updateLocation(e.latlng.lat, e.latlng.lng);
         });
 
-        // Set initial marker if editing
         if (form.value.lat && form.value.lng) {
             updateLocation(form.value.lat, form.value.lng);
         }
 
-        // Force map resize after modal animation
         setTimeout(() => {
             map.value?.invalidateSize();
         }, 200);
@@ -125,8 +121,7 @@ async function handleFileChange(event: Event) {
     if (target.files && target.files.length > 0) {
         const file = target.files[0];
         
-        // Basic validation
-        if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        if (file.size > 10 * 1024 * 1024) {
             alert('File too large (Max 10MB)');
             return;
         }

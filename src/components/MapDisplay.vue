@@ -2,13 +2,14 @@
 import { onMounted, ref, watch, shallowRef, inject } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
+import { getLocalizedContent } from '../utils';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 interface Place {
   id?: number;
-  name: string;
-  description: string;
+  name: Record<string, string>;
+  description: Record<string, string>;
   lat: number;
   lng: number;
   category: string;
@@ -256,13 +257,6 @@ onMounted(() => {
         cartoLight.addTo(map.value);
     }
 
-    const baseMaps = {
-        "🌍 Sokak (Açık)": cartoLight,
-        "🌑 Karanlık": cartoDark,
-        "🗺️ Standart (OSM)": osm,
-        "🛰️ Uydu": esriSatellite
-    };
-
     // Overlay Layers (Optional Layers)
     const googleTraffic = L.tileLayer('https://mt0.google.com/vt?lyrs=h@159000000,traffic|seconds_into_week:-1&style=3&x={x}&y={y}&z={z}', {
         attribution: '&copy; Google'
@@ -278,6 +272,13 @@ onMounted(() => {
     const cloudLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${OWM_API_KEY}`, {
         attribution: '&copy; OpenWeatherMap'
     });
+
+    const baseMaps = {
+        "🌍 Sokak (Açık)": cartoLight,
+        "🌑 Karanlık": cartoDark,
+        "🗺️ Standart (OSM)": osm,
+        "🛰️ Uydu": esriSatellite
+    };
 
     const overlayMaps = {
         "🚦 Trafik": googleTraffic,
@@ -394,8 +395,11 @@ function updateMarkers() {
       icon: createCustomIcon(place.category, props.selectedPlaceId === place.id)
     });
 
+    const placeName = getLocalizedContent(place.name, locale.value);
+    const placeDesc = getLocalizedContent(place.description, locale.value);
+
     const imageHtml = place.imageUrl 
-        ? `<div class="w-[calc(100%+40px)] -mx-5 -mt-5 mb-3 h-32 rounded-t-xl overflow-hidden"><img src="${place.imageUrl}" alt="${place.name}" class="w-full h-full object-cover" /></div>` 
+        ? `<div class="w-[calc(100%+40px)] -mx-5 -mt-5 mb-3 h-32 rounded-t-xl overflow-hidden"><img src="${place.imageUrl}" alt="${placeName}" class="w-full h-full object-cover" /></div>` 
         : '';
 
     const popupContent = `
@@ -405,9 +409,9 @@ function updateMarkers() {
                 <span class="popup-category">${getCategoryEmoji(place.category)} ${t(`categories.${place.category}`)}</span>
                 <span class="popup-city">📍 ${place.city}</span>
             </div>
-            <h3>${place.name}</h3>
-            <p>${place.description}</p>
-            <button class="btn-add-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white border-none py-2.5 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}" data-name="${place.name}">
+            <h3>${placeName}</h3>
+            <p>${placeDesc}</p>
+            <button class="btn-add-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white border-none py-2.5 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}" data-name="${placeName}">
                 🚩 Rotaya Ekle
             </button>
             <button class="btn-comments w-full mt-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white border-none py-2 px-3 rounded-lg font-medium cursor-pointer transition-colors flex items-center justify-center gap-2" data-id="${place.id}">

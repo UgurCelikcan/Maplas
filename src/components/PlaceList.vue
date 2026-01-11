@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, inject } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { getLocalizedContent } from '../utils';
 
 const { t, locale } = useI18n();
 
 interface Place {
   id?: number;
-  name: string;
-  description: string;
+  name: Record<string, string>;
+  description: Record<string, string>;
   lat: number;
   lng: number;
   category: string;
@@ -80,7 +81,8 @@ const cities = computed(() => {
 
 const filteredPlaces = computed(() => {
   return props.places.filter(place => {
-    const matchesSearch = place.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+    const name = getLocalizedContent(place.name, locale.value);
+    const matchesSearch = name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
                           place.city.toLowerCase().includes(searchQuery.value.toLowerCase());
     
     const matchesCategory = selectedCategories.value.length === 0 || selectedCategories.value.includes(place.category);
@@ -215,7 +217,7 @@ function getCategoryEmoji(category: string) {
                 </select>
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 text-xs">▼</span>
             </div>
-
+            
             <button class="w-11 h-11 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-700 dark:text-emerald-300 cursor-pointer transition-colors hover:bg-emerald-200 dark:hover:bg-emerald-800 flex-shrink-0" @click="$emit('search-nearby')" :title="t('map.locate_me')">
                 📍
             </button>
@@ -227,6 +229,14 @@ function getCategoryEmoji(category: string) {
             </button>
             <div class="w-[1px] bg-slate-300 dark:bg-zinc-700 mx-1 h-6 self-center flex-shrink-0"></div>
             
+            <button 
+                v-if="searchQuery || selectedCategories.length > 0 || selectedCity"
+                @click="searchQuery = ''; selectedCategories = []; selectedCity = ''"
+                class="px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/30 text-[10px] font-bold uppercase tracking-wider flex-shrink-0 hover:bg-red-100 transition-colors cursor-pointer"
+            >
+                ✕ {{ t('ui.clear_filters') }}
+            </button>
+
             <button 
                 v-for="cat in categories" 
                 :key="cat"
@@ -254,13 +264,13 @@ function getCategoryEmoji(category: string) {
           @click="onSelect(place.id as number)"
         >
           <div v-if="place.imageUrl" class="w-full h-40 overflow-hidden bg-slate-200 dark:bg-zinc-700">
-            <img :src="place.imageUrl" :alt="place.name" loading="lazy" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <img :src="place.imageUrl" :alt="getLocalizedContent(place.name, locale)" loading="lazy" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
           </div>
           <div class="p-4">
             <div class="mb-3">
                 <div class="flex justify-between items-start mb-1.5">
                     <div class="flex items-center gap-2 flex-grow overflow-hidden">
-                        <h3 class="m-0 text-base font-semibold text-slate-900 dark:text-white leading-tight truncate">{{ place.name }}</h3>
+                        <h3 class="m-0 text-base font-semibold text-slate-900 dark:text-white leading-tight truncate">{{ getLocalizedContent(place.name, locale) }}</h3>
                         <span class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex-shrink-0 text-lg" :title="place.category">{{ getCategoryEmoji(place.category) }}</span>
                     </div>
                     <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -278,7 +288,7 @@ function getCategoryEmoji(category: string) {
                     <span class="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">{{ t(`categories.${place.category}`) }}</span>
                 </div>
             </div>
-            <p class="m-0 text-sm text-slate-500 dark:text-zinc-400 leading-relaxed line-clamp-2">{{ place.description }}</p>
+            <p class="m-0 text-sm text-slate-500 dark:text-zinc-400 leading-relaxed line-clamp-2">{{ getLocalizedContent(place.description, locale) }}</p>
           </div>
         </li>
       </ul>

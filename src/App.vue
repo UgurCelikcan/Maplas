@@ -155,18 +155,18 @@ async function handleNearbySearch() {
         try {
             const { latitude, longitude } = pos.coords;
             const nearbyPlaces = await getNearbyPlaces(latitude, longitude, 10); // 10km radius
-            places.value = nearbyPlaces || [];
             
-            if (places.value.length === 0) {
-                alert(t('ui.no_results'));
+            if (nearbyPlaces && nearbyPlaces.length > 0) {
+                places.value = nearbyPlaces;
             } else {
-                // Optionally fly to user location on map if we could access map instance here, 
-                // but MapDisplay handles its own user location logic.
-                // We could emit an event to MapDisplay via a prop change or ref, but let's keep it simple.
+                alert(t('ui.no_results'));
+                // If no results, reload all places to avoid empty screen
+                fetchPlaces();
             }
         } catch (error) {
             console.error('Error searching nearby:', error);
             alert(t('common.error'));
+            fetchPlaces(); // Fallback
         }
     }, (err) => {
         console.error('Geolocation error:', err);

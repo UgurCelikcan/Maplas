@@ -33,4 +33,14 @@ export const getNearbyPlaces = async (lat: number, lng: number, radiusKm: number
     return response.data;
 };
 
+export const getUserComments = async () => {
+    const response = await api.get<any[]>('/user?action=comments');
+    return response.data;
+};
+
+export const getAdminStats = async () => {
+    const response = await api.get<any>('/admin?action=stats');
+    return response.data;
+};
+
 export default api;
