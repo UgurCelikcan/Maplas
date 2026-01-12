@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue';
+import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { getLocalizedContent } from '../utils';
 
@@ -17,10 +17,14 @@ interface Place {
 }
 
 const props = defineProps<{
-  places: Place[];
+  places: Place[]; // All places for filter options
+  visiblePlaces: Place[]; // Filtered places to display
   selectedPlaceId: number | null;
   currentUser: { username: string, role: string } | null;
   isOpen: boolean;
+  searchQuery: string;
+  selectedCategories: string[];
+  selectedCity: string;
 }>();
 
 const emit = defineEmits<{
@@ -36,13 +40,12 @@ const emit = defineEmits<{
   (e: 'close-sidebar'): void;
   (e: 'open-about'): void;
   (e: 'search-nearby'): void;
+  (e: 'update:searchQuery', value: string): void;
+  (e: 'update:selectedCategories', value: string[]): void;
+  (e: 'update:selectedCity', value: string): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
-
-const searchQuery = ref('');
-const selectedCategories = ref<string[]>([]);
-const selectedCity = ref<string>('');
 
 const showProfileMenu = ref(false);
 const showLangMenu = ref(false);
@@ -69,6 +72,17 @@ function changeLanguage(code: string) {
     showLangMenu.value = false;
 }
 
+// Proxies for v-model
+const localSearchQuery = computed({
+  get: () => props.searchQuery,
+  set: (val) => emit('update:searchQuery', val)
+});
+
+const localSelectedCity = computed({
+  get: () => props.selectedCity,
+  set: (val) => emit('update:selectedCity', val)
+});
+
 const categories = computed(() => {
   const uniqueCategories = new Set(props.places.map(p => p.category));
   return Array.from(uniqueCategories);
@@ -79,26 +93,21 @@ const cities = computed(() => {
   return Array.from(uniqueCities).sort();
 });
 
-const filteredPlaces = computed(() => {
-  return props.places.filter(place => {
-    const name = getLocalizedContent(place.name, locale.value);
-    const matchesSearch = name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          place.city.toLowerCase().includes(searchQuery.value.toLowerCase());
-    
-    const matchesCategory = selectedCategories.value.length === 0 || selectedCategories.value.includes(place.category);
-    
-    const matchesCity = selectedCity.value === '' || place.city === selectedCity.value;
-
-    return matchesSearch && matchesCategory && matchesCity;
-  });
-});
-
 function toggleCategory(cat: string) {
-  if (selectedCategories.value.includes(cat)) {
-    selectedCategories.value = selectedCategories.value.filter(c => c !== cat);
+  const newCategories = [...props.selectedCategories];
+  if (newCategories.includes(cat)) {
+    const index = newCategories.indexOf(cat);
+    newCategories.splice(index, 1);
   } else {
-    selectedCategories.value.push(cat);
+    newCategories.push(cat);
   }
+  emit('update:selectedCategories', newCategories);
+}
+
+function clearFilters() {
+    emit('update:searchQuery', '');
+    emit('update:selectedCategories', []);
+    emit('update:selectedCity', '');
 }
 
 function onSelect(id: number) {
@@ -200,7 +209,7 @@ function getCategoryEmoji(category: string) {
             <div class="relative flex-grow">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-50 text-sm">🔍</span>
                 <input 
-                v-model="searchQuery" 
+                v-model="localSearchQuery" 
                 type="text" 
                 :placeholder="t('ui.search_placeholder')" 
                 class="w-full py-2.5 pl-9 pr-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm transition-all outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
@@ -209,7 +218,7 @@ function getCategoryEmoji(category: string) {
             
             <div class="relative w-1/3 min-w-[120px]">
                 <select 
-                    v-model="selectedCity" 
+                    v-model="localSelectedCity" 
                     class="w-full h-full py-2.5 px-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm appearance-none outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
                 >
                     <option value="">{{ t('common.all_cities', 'Tüm Şehirler') }}</option>
@@ -231,7 +240,7 @@ function getCategoryEmoji(category: string) {
             
             <button 
                 v-if="searchQuery || selectedCategories.length > 0 || selectedCity"
-                @click="searchQuery = ''; selectedCategories = []; selectedCity = ''"
+                @click="clearFilters"
                 class="px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/30 text-[10px] font-bold uppercase tracking-wider flex-shrink-0 hover:bg-red-100 transition-colors cursor-pointer"
             >
                 ✕ {{ t('ui.clear_filters') }}
@@ -255,9 +264,9 @@ function getCategoryEmoji(category: string) {
     </div>
 
     <div class="flex-grow overflow-y-auto bg-slate-50 dark:bg-zinc-900 p-4 transition-colors duration-300" @click="showProfileMenu = false">
-      <ul v-if="filteredPlaces.length > 0" class="m-0 p-0 list-none flex flex-col gap-3">
+      <ul v-if="visiblePlaces.length > 0" class="m-0 p-0 list-none flex flex-col gap-3">
         <li 
-          v-for="place in filteredPlaces" 
+          v-for="place in visiblePlaces" 
           :key="place.id" 
           class="group bg-white dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 cursor-pointer overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:shadow-lg dark:hover:shadow-black/30 hover:border-slate-300 dark:hover:border-zinc-600"
           :class="{ '!border-emerald-500 !bg-emerald-50/50 dark:!bg-zinc-800 ring-2 ring-emerald-500/40': place.id === selectedPlaceId }"
@@ -294,7 +303,7 @@ function getCategoryEmoji(category: string) {
       </ul>
       <div v-else class="py-16 px-5 text-center text-slate-500 dark:text-zinc-500">
         <p>{{ t('ui.no_results') }}</p>
-        <button class="mt-4 bg-transparent border border-slate-400 dark:border-zinc-600 text-slate-500 dark:text-zinc-500 px-4 py-2 rounded-lg cursor-pointer hover:border-slate-600 dark:hover:border-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors" @click="searchQuery = ''; selectedCategories = []; selectedCity = ''">{{ t('ui.clear_filters') }}</button>
+        <button class="mt-4 bg-transparent border border-slate-400 dark:border-zinc-600 text-slate-500 dark:text-zinc-500 px-4 py-2 rounded-lg cursor-pointer hover:border-slate-600 dark:hover:border-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors" @click="clearFilters">{{ t('ui.clear_filters') }}</button>
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, provide, watch, onMounted } from 'vue';
+import { ref, provide, watch, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api, { getNearbyPlaces } from './api';
 import MapDisplay from './components/MapDisplay.vue';
@@ -10,13 +10,14 @@ import AuthModal from './components/AuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
 import AboutModal from './components/AboutModal.vue';
 import UserProfile from './components/UserProfile.vue';
+import { getLocalizedContent } from './utils';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 interface Place {
   id?: number;
-  name: string;
-  description: string;
+  name: Record<string, string>; // Changed to Record to match updated PlaceList/utils
+  description: Record<string, string>;
   lat: number;
   lng: number;
   category: string;
@@ -42,6 +43,25 @@ const currentUser = ref<User | null>(null);
 const commentPlace = ref<{id: number, name: string} | null>(null);
 const editingPlace = ref<Place | undefined>(undefined);
 const isSidebarOpen = ref(false);
+
+// Filter States
+const searchQuery = ref('');
+const selectedCategories = ref<string[]>([]);
+const selectedCity = ref<string>('');
+
+const filteredPlaces = computed(() => {
+  return places.value.filter(place => {
+    const name = getLocalizedContent(place.name, locale.value);
+    const matchesSearch = name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                          place.city.toLowerCase().includes(searchQuery.value.toLowerCase());
+    
+    const matchesCategory = selectedCategories.value.length === 0 || selectedCategories.value.includes(place.category);
+    
+    const matchesCity = selectedCity.value === '' || place.city === selectedCity.value;
+
+    return matchesSearch && matchesCategory && matchesCity;
+  });
+});
 
 const fetchPlaces = async () => {
   try {
@@ -140,7 +160,9 @@ function handleSelectPlace(id: number) {
 function handleViewComments(id: number) {
   const place = places.value.find(p => p.id === id);
   if (place) {
-    commentPlace.value = { id: place.id as number, name: place.name };
+    // Correctly handle the name if it's a Record<string, string> or string
+    const placeName = typeof place.name === 'string' ? place.name : getLocalizedContent(place.name, locale.value);
+    commentPlace.value = { id: place.id as number, name: placeName };
     showCommentsModal.value = true;
   }
 }
@@ -201,7 +223,11 @@ watch(isDarkMode, (newVal) => {
     </button>
 
     <PlaceList 
-      :places="places" 
+      :places="places"
+      :visible-places="filteredPlaces"
+      v-model:searchQuery="searchQuery"
+      v-model:selectedCategories="selectedCategories"
+      v-model:selectedCity="selectedCity"
       :selected-place-id="selectedPlaceId"
       :current-user="currentUser"
       :is-open="isSidebarOpen"
@@ -219,7 +245,7 @@ watch(isDarkMode, (newVal) => {
       @search-nearby="handleNearbySearch"
     />
     <MapDisplay 
-      :places="places" 
+      :places="filteredPlaces" 
       :selected-place-id="selectedPlaceId" 
       @select-place="handleSelectPlace"
       @view-comments="handleViewComments"
