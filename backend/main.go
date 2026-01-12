@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bregydoc/gtranslate"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -166,6 +165,11 @@ func initDB() {
 	}
 
 	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
+	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS image_url TEXT")
+	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS city TEXT")
+	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS category TEXT")
+	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS creator_id INT REFERENCES users(id) ON DELETE SET NULL")
+	db.Exec("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE CASCADE")
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
@@ -262,8 +266,10 @@ func translateContent(text string) map[string]string {
 	result["tr"] = text
 	targetLangs := []string{"en", "de", "fr", "ru", "ar"}
 	for _, lang := range targetLangs {
-		translated, err := gtranslate.TranslateWithParams(text, gtranslate.TranslationParams{From: "tr", To: lang})
-		if err == nil { result[lang] = translated } else { result[lang] = text }
+		// Temporary disable translation to prevent timeouts/errors from external service
+		// translated, err := gtranslate.TranslateWithParams(text, gtranslate.TranslationParams{From: "tr", To: lang})
+		// if err == nil { result[lang] = translated } else { result[lang] = text }
+		result[lang] = text
 	}
 	return result
 }
@@ -316,7 +322,11 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			err = db.QueryRow("INSERT INTO places (name, description, lat, lng, category, city, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id", string(nameJSON), string(descJSON), pr.Lat, pr.Lng, pr.Category, pr.City, pr.ImageURL, status).Scan(&id)
 		}
-		if err != nil { http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError); return }
+		if err != nil {
+			log.Printf("Error inserting place: %v", err)
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 		p := Place{ID: id, Name: nameMap, Description: descMap, Lat: pr.Lat, Lng: pr.Lng, Category: pr.Category, City: pr.City, ImageURL: pr.ImageURL, Status: status}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(p)

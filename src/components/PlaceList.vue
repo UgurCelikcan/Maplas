@@ -134,70 +134,76 @@ function getCategoryEmoji(category: string) {
 
 <template>
   <div 
-    class="fixed inset-y-0 left-0 w-full md:w-[420px] md:relative bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 flex flex-col h-full border-r border-slate-200 dark:border-zinc-800 shadow-xl z-[1000] transition-transform duration-300 transform"
+    class="fixed inset-y-0 left-0 w-full md:w-[420px] md:relative bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 flex flex-col h-full border-r border-slate-200 dark:border-zinc-800 shadow-2xl z-[1000] transition-transform duration-300 transform"
     :class="isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
   >
-    <div class="p-6 bg-slate-50 dark:bg-zinc-800 border-b border-slate-200 dark:border-zinc-700 transition-colors duration-300">
+    <!-- Glassmorphic Sticky Header -->
+    <div class="sticky top-0 z-20 px-6 py-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-b border-slate-200/50 dark:border-zinc-700/50 transition-colors duration-300">
       
       <!-- Top Bar: Logo & User Actions -->
-      <div class="flex justify-between items-start mb-5 gap-2">
-        <div class="flex items-center gap-3 min-w-0">
-            <img src="/Maplas.png" alt="Maplas Logo" class="w-10 h-10 object-contain rounded-lg flex-shrink-0" />
+      <div class="flex justify-between items-center mb-5 gap-2">
+        <div class="flex items-center gap-3 min-w-0 group cursor-default">
+            <div class="relative">
+                <div class="absolute inset-0 bg-emerald-500 blur opacity-20 group-hover:opacity-40 transition-opacity rounded-xl"></div>
+                <img src="/Maplas.png" alt="Maplas Logo" class="relative w-10 h-10 object-contain rounded-xl shadow-sm" />
+            </div>
             <div class="min-w-0">
-                <h2 class="m-0 text-xl font-bold text-slate-900 dark:text-white tracking-tight truncate">{{ t('ui.title') }}</h2>
-                <p class="m-0 mt-0.5 opacity-60 text-sm truncate">{{ t('ui.subtitle') }}</p>
+                <h2 class="m-0 text-xl font-bold text-slate-900 dark:text-white tracking-tight truncate group-hover:text-emerald-500 transition-colors">{{ t('ui.title') }}</h2>
+                <p class="m-0 text-[11px] font-medium uppercase tracking-widest text-slate-400 dark:text-zinc-500">{{ t('ui.subtitle') }}</p>
             </div>
         </div>
         
-        <div class="flex gap-1.5 relative flex-shrink-0">
+        <div class="flex gap-2 relative flex-shrink-0">
              <!-- Mobile Close Button -->
-             <button class="md:hidden w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-white cursor-pointer transition-colors" @click="$emit('close-sidebar')">
+             <button class="md:hidden w-9 h-9 flex items-center justify-center bg-slate-100 dark:bg-zinc-800 rounded-full text-slate-700 dark:text-zinc-400 transition-all active:scale-90" @click="$emit('close-sidebar')">
                 ✕
             </button>
 
             <!-- Language Switcher -->
             <div class="relative">
-                <button class="w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-lg cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-white/10" @click="showLangMenu = !showLangMenu" :title="locale === 'tr' ? 'Dil Seç' : 'Select Language'">
+                <button class="w-9 h-9 flex items-center justify-center rounded-full text-lg cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-white/10 active:scale-95" @click="showLangMenu = !showLangMenu" :title="locale === 'tr' ? 'Dil Seç' : 'Select Language'">
                     {{ languages.find(l => l.code === locale)?.flag }}
                 </button>
-                <div v-if="showLangMenu" class="absolute right-0 top-12 w-40 max-h-[300px] overflow-y-auto bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl shadow-xl z-[100] flex flex-col scrollbar-thin">
-                    <button v-for="lang in languages" :key="lang.code" @click="changeLanguage(lang.code)" class="px-4 py-2 text-sm text-left hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2 flex-shrink-0">
-                        <span class="text-lg">{{ lang.flag }}</span> <span>{{ lang.name }}</span>
+                <div v-if="showLangMenu" class="absolute left-1/2 -translate-x-1/2 top-11 w-44 max-h-[300px] overflow-y-auto bg-white/95 dark:bg-zinc-800/95 backdrop-blur-md border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-xl z-[100] flex flex-col py-1">
+                    <button v-for="lang in languages" :key="lang.code" @click="changeLanguage(lang.code)" class="px-3 py-2.5 text-sm text-left hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors flex items-center gap-3 flex-shrink-0">
+                        <span class="text-xl leading-none shadow-sm rounded-sm">{{ lang.flag }}</span> <span class="font-medium">{{ lang.name }}</span>
                     </button>
                 </div>
             </div>
 
-            <button class="w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-white cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:border-emerald-500" @click="$emit('open-about')" :title="t('about.title')">
-                ℹ️
+            <button class="w-9 h-9 flex items-center justify-center rounded-full text-slate-500 dark:text-zinc-400 cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-white/10 hover:text-emerald-500 dark:hover:text-emerald-400 active:scale-95" @click="$emit('open-about')" :title="t('about.title')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
             </button>
 
-            <button class="w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-white cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:border-emerald-500" @click="$emit('toggle-theme')" :title="isDarkMode ? t('ui.light_mode') : t('ui.dark_mode')">
-                {{ isDarkMode ? '☀️' : '🌙' }}
+            <button class="w-9 h-9 flex items-center justify-center rounded-full text-slate-500 dark:text-zinc-400 cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-white/10 hover:text-yellow-500 active:scale-95" @click="$emit('toggle-theme')" :title="isDarkMode ? t('ui.light_mode') : t('ui.dark_mode')">
+                <span v-if="isDarkMode">☀️</span>
+                <span v-else>🌙</span>
             </button>
             
-            <button v-if="!currentUser" class="w-10 h-10 flex items-center justify-center bg-transparent border border-slate-300 dark:border-zinc-700 rounded-lg text-slate-700 dark:text-white cursor-pointer transition-colors hover:bg-slate-100 dark:hover:bg-white/10 hover:border-emerald-500" @click="$emit('open-auth')" :title="t('ui.login')">
-                👤
+            <button v-if="!currentUser" class="w-9 h-9 flex items-center justify-center bg-emerald-500 text-white rounded-full shadow-lg shadow-emerald-500/30 cursor-pointer transition-all hover:bg-emerald-600 hover:shadow-emerald-500/40 active:scale-95" @click="$emit('open-auth')" :title="t('ui.login')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             </button>
 
             <div v-else class="relative">
-                <button class="w-10 h-10 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 rounded-lg text-emerald-700 dark:text-emerald-300 cursor-pointer font-bold" @click="showProfileMenu = !showProfileMenu">
+                <button class="w-9 h-9 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 rounded-full text-emerald-700 dark:text-emerald-400 cursor-pointer font-bold shadow-sm transition-all hover:ring-2 hover:ring-emerald-500/20" @click="showProfileMenu = !showProfileMenu">
                     {{ currentUser.username.charAt(0).toUpperCase() }}
                 </button>
                 
                 <!-- Profile Dropdown -->
-                <div v-if="showProfileMenu" class="absolute right-0 top-12 w-48 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl shadow-xl z-[100] overflow-hidden flex flex-col" @click="showProfileMenu = false">
-                    <div class="p-3 border-b border-slate-100 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900/50">
-                        <p class="m-0 text-sm font-bold truncate">{{ currentUser.username }}</p>
-                        <p class="m-0 text-xs opacity-60">{{ currentUser.role === 'admin' ? `${t('ui.admin')} 🛡️` : t('ui.user') }}</p>
+                <div v-if="showProfileMenu" class="absolute right-0 top-11 w-56 bg-white/95 dark:bg-zinc-800/95 backdrop-blur-md border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-xl z-[100] overflow-hidden flex flex-col py-1" @click="showProfileMenu = false">
+                    <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-700/50 bg-slate-50/50 dark:bg-zinc-900/50">
+                        <p class="m-0 text-sm font-bold truncate text-slate-900 dark:text-white">{{ currentUser.username }}</p>
+                        <p class="m-0 text-xs font-medium text-slate-500 dark:text-zinc-500 mt-0.5">{{ currentUser.role === 'admin' ? `${t('ui.admin')} 🛡️` : t('ui.user') }}</p>
                     </div>
-                    <button v-if="currentUser.role === 'admin'" @click="$emit('open-admin')" class="text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2">
-                        🛡️ {{ t('ui.admin_panel') }}
+                    <button v-if="currentUser.role === 'admin'" @click="$emit('open-admin')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
+                        <span>🛡️</span> {{ t('ui.admin_panel') }}
                     </button>
-                    <button @click="$emit('open-profile')" class="text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2">
-                        👤 {{ t('profile.title', 'Profilim') }}
+                    <button @click="$emit('open-profile')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
+                        <span>👤</span> {{ t('profile.title', 'Profilim') }}
                     </button>
-                    <button @click="$emit('logout')" class="text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2">
-                        🚪 {{ t('ui.logout') }}
+                    <div class="h-px bg-slate-100 dark:bg-zinc-700/50 my-1"></div>
+                    <button @click="$emit('logout')" class="text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2.5">
+                        <span>🚪</span> {{ t('ui.logout') }}
                     </button>
                 </div>
             </div>
@@ -206,42 +212,44 @@ function getCategoryEmoji(category: string) {
       
       <div class="flex flex-col gap-3">
         <div class="flex gap-2">
-            <div class="relative flex-grow">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 opacity-50 text-sm">🔍</span>
+            <div class="relative flex-grow group">
+                <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </span>
                 <input 
                 v-model="localSearchQuery" 
                 type="text" 
                 :placeholder="t('ui.search_placeholder')" 
-                class="w-full py-2.5 pl-9 pr-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm transition-all outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                class="w-full py-2.5 pl-10 pr-4 rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/50 text-slate-900 dark:text-white text-sm transition-all outline-none focus:bg-white dark:focus:bg-zinc-800 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 shadow-sm"
                 />
             </div>
             
-            <div class="relative w-1/3 min-w-[120px]">
+            <div class="relative w-1/3 min-w-[120px] group">
                 <select 
                     v-model="localSelectedCity" 
-                    class="w-full h-full py-2.5 px-3 rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm appearance-none outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+                    class="w-full h-full py-2.5 pl-3 pr-8 rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/50 text-slate-900 dark:text-white text-sm appearance-none outline-none focus:bg-white dark:focus:bg-zinc-800 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 shadow-sm cursor-pointer transition-all"
                 >
                     <option value="">{{ t('common.all_cities', 'Tüm Şehirler') }}</option>
                     <option v-for="city in cities" :key="city" :value="city">{{ city }}</option>
                 </select>
-                <span class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 text-xs">▼</span>
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-emerald-500 transition-colors text-xs">▼</span>
             </div>
             
-            <button class="w-11 h-11 flex items-center justify-center bg-emerald-100 dark:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 rounded-xl text-emerald-700 dark:text-emerald-300 cursor-pointer transition-colors hover:bg-emerald-200 dark:hover:bg-emerald-800 flex-shrink-0" @click="$emit('search-nearby')" :title="t('map.locate_me')">
-                📍
+            <button class="w-11 h-11 flex items-center justify-center bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl text-slate-500 dark:text-zinc-400 cursor-pointer transition-all hover:bg-emerald-500 hover:text-white hover:border-emerald-500 dark:hover:border-emerald-500 shadow-sm active:scale-95 flex-shrink-0 group" @click="$emit('search-nearby')" :title="t('map.locate_me')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="group-hover:animate-pulse"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
             </button>
         </div>
         
-        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide items-center">
-            <button class="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold whitespace-nowrap hover:bg-emerald-500/20 transition-colors cursor-pointer flex-shrink-0" @click="$emit('add-click')">
-                + {{ t('ui.add_new') }}
+        <div class="flex gap-2 overflow-x-auto pb-2 -mb-2 pt-1 scrollbar-hide items-center mask-fade-right">
+            <button class="px-3.5 py-1.5 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 text-xs font-bold whitespace-nowrap hover:bg-emerald-600 hover:scale-105 transition-all cursor-pointer flex-shrink-0 flex items-center gap-1" @click="$emit('add-click')">
+                <span>+</span> {{ t('ui.add_new') }}
             </button>
-            <div class="w-[1px] bg-slate-300 dark:bg-zinc-700 mx-1 h-6 self-center flex-shrink-0"></div>
+            <div class="w-[1px] bg-slate-200 dark:bg-zinc-700 mx-1 h-5 self-center flex-shrink-0"></div>
             
             <button 
                 v-if="searchQuery || selectedCategories.length > 0 || selectedCity"
                 @click="clearFilters"
-                class="px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/30 text-[10px] font-bold uppercase tracking-wider flex-shrink-0 hover:bg-red-100 transition-colors cursor-pointer"
+                class="px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/30 text-[10px] font-bold uppercase tracking-wider flex-shrink-0 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors cursor-pointer"
             >
                 ✕ {{ t('ui.clear_filters') }}
             </button>
@@ -249,11 +257,11 @@ function getCategoryEmoji(category: string) {
             <button 
                 v-for="cat in categories" 
                 :key="cat"
-                class="px-3 py-1.5 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all flex-shrink-0 select-none"
+                class="px-3.5 py-1.5 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all flex-shrink-0 select-none active:scale-95"
                 :class="[
                 selectedCategories.includes(cat) 
-                    ? 'bg-emerald-500 text-slate-900 font-semibold shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-500/50 ring-offset-1 dark:ring-offset-zinc-800' 
-                    : 'bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-600'
+                    ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 shadow-lg' 
+                    : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700'
                 ]"
                 @click="toggleCategory(cat)"
             >
@@ -263,47 +271,60 @@ function getCategoryEmoji(category: string) {
       </div>
     </div>
 
-    <div class="flex-grow overflow-y-auto bg-slate-50 dark:bg-zinc-900 p-4 transition-colors duration-300" @click="showProfileMenu = false">
-      <ul v-if="visiblePlaces.length > 0" class="m-0 p-0 list-none flex flex-col gap-3">
+    <!-- Place List -->
+    <div class="flex-grow overflow-y-auto bg-slate-50 dark:bg-zinc-950 p-4 transition-colors duration-300" @click="showProfileMenu = false">
+      <ul v-if="visiblePlaces.length > 0" class="m-0 p-0 list-none flex flex-col gap-4 pb-20 md:pb-4">
         <li 
           v-for="place in visiblePlaces" 
           :key="place.id" 
-          class="group bg-white dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 cursor-pointer overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:shadow-lg dark:hover:shadow-black/30 hover:border-slate-300 dark:hover:border-zinc-600"
-          :class="{ '!border-emerald-500 !bg-emerald-50/50 dark:!bg-zinc-800 ring-2 ring-emerald-500/40': place.id === selectedPlaceId }"
+          class="group bg-white dark:bg-zinc-900/80 rounded-2xl border border-slate-200/60 dark:border-zinc-800 cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 hover:-translate-y-1 hover:border-emerald-500/30 dark:hover:border-emerald-500/30 relative"
+          :class="{ '!border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg shadow-emerald-500/10': place.id === selectedPlaceId }"
           @click="onSelect(place.id as number)"
         >
-          <div v-if="place.imageUrl" class="w-full h-40 overflow-hidden bg-slate-200 dark:bg-zinc-700">
-            <img :src="place.imageUrl" :alt="getLocalizedContent(place.name, locale)" loading="lazy" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-          </div>
-          <div class="p-4">
-            <div class="mb-3">
-                <div class="flex justify-between items-start mb-1.5">
-                    <div class="flex items-center gap-2 flex-grow overflow-hidden">
-                        <h3 class="m-0 text-base font-semibold text-slate-900 dark:text-white leading-tight truncate">{{ getLocalizedContent(place.name, locale) }}</h3>
-                        <span class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex-shrink-0 text-lg" :title="place.category">{{ getCategoryEmoji(place.category) }}</span>
-                    </div>
-                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <button class="p-1 rounded bg-transparent border-none cursor-pointer hover:bg-emerald-500/10 hover:text-emerald-500" @click.stop="$emit('edit-place', place)" :title="t('common.edit')">
-                            ✏️
-                        </button>
-                        <!-- Only show delete for admins -->
-                        <button v-if="currentUser?.role === 'admin'" class="p-1 rounded bg-transparent border-none cursor-pointer hover:bg-red-500/10 hover:text-red-500" @click.stop="$emit('delete-place', place.id as number)" :title="t('common.delete')">
-                            🗑️
-                        </button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2.5">
-                    <span class="text-xs font-medium text-slate-400 dark:text-zinc-400 flex items-center">📍 {{ place.city }}</span>
-                    <span class="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">{{ t(`categories.${place.category}`) }}</span>
-                </div>
+          <div v-if="place.imageUrl" class="w-full h-48 overflow-hidden bg-slate-100 dark:bg-zinc-800 relative">
+            <img :src="place.imageUrl" :alt="getLocalizedContent(place.name, locale)" loading="lazy" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60"></div>
+            <div class="absolute bottom-3 left-4 right-4 flex justify-between items-end">
+                 <span class="text-white font-bold text-lg drop-shadow-md truncate">{{ getLocalizedContent(place.name, locale) }}</span>
+                 <span class="text-xs bg-white/20 backdrop-blur-md text-white px-2 py-1 rounded-md border border-white/20 shadow-sm">{{ getCategoryEmoji(place.category) }}</span>
             </div>
-            <p class="m-0 text-sm text-slate-500 dark:text-zinc-400 leading-relaxed line-clamp-2">{{ getLocalizedContent(place.description, locale) }}</p>
+          </div>
+          
+          <div class="p-4 pt-3">
+            <div v-if="!place.imageUrl" class="flex justify-between items-start mb-2">
+                 <h3 class="m-0 text-lg font-bold text-slate-900 dark:text-white leading-tight truncate">{{ getLocalizedContent(place.name, locale) }}</h3>
+                 <span class="text-xl">{{ getCategoryEmoji(place.category) }}</span>
+            </div>
+
+            <div class="flex items-center gap-3 mb-3">
+                <span class="text-xs font-semibold text-slate-500 dark:text-zinc-400 flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    {{ place.city }}
+                </span>
+                <span class="w-1 h-1 rounded-full bg-slate-300 dark:bg-zinc-700"></span>
+                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">{{ t(`categories.${place.category}`) }}</span>
+            </div>
+            
+            <p class="m-0 text-sm text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2 mb-4">{{ getLocalizedContent(place.description, locale) }}</p>
+
+            <div class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                <button class="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors" @click.stop="$emit('edit-place', place)">
+                    {{ t('common.edit') }}
+                </button>
+                <button v-if="currentUser?.role === 'admin'" class="px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors" @click.stop="$emit('delete-place', place.id as number)">
+                    {{ t('common.delete') }}
+                </button>
+            </div>
           </div>
         </li>
       </ul>
-      <div v-else class="py-16 px-5 text-center text-slate-500 dark:text-zinc-500">
-        <p>{{ t('ui.no_results') }}</p>
-        <button class="mt-4 bg-transparent border border-slate-400 dark:border-zinc-600 text-slate-500 dark:text-zinc-500 px-4 py-2 rounded-lg cursor-pointer hover:border-slate-600 dark:hover:border-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 transition-colors" @click="clearFilters">{{ t('ui.clear_filters') }}</button>
+      <div v-else class="h-full flex flex-col items-center justify-center text-center text-slate-400 dark:text-zinc-500 pb-20">
+        <div class="w-16 h-16 bg-slate-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4 text-3xl opacity-50">
+            🔍
+        </div>
+        <p class="font-medium mb-1">{{ t('ui.no_results') }}</p>
+        <p class="text-xs max-w-[200px] mx-auto opacity-60 mb-6">Arama kriterlerinizi değiştirerek tekrar deneyin.</p>
+        <button class="bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm hover:shadow-md hover:border-emerald-500/50 transition-all active:scale-95" @click="clearFilters">{{ t('ui.clear_filters') }}</button>
       </div>
     </div>
   </div>
