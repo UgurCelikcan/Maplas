@@ -15,6 +15,7 @@ interface Place {
   category: string;
   city: string;
   imageUrl?: string;
+  is_favorite?: boolean;
 }
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select-place', id: number): void;
   (e: 'view-comments', id: number): void;
+  (e: 'toggle-favorite', id: number): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
@@ -257,6 +259,18 @@ onMounted(() => {
         cartoLight.addTo(map.value);
     }
 
+    watch(isDarkMode, (newVal) => {
+        if (map.value) {
+            if (newVal) {
+                map.value.removeLayer(cartoLight);
+                map.value.addLayer(cartoDark);
+            } else {
+                map.value.removeLayer(cartoDark);
+                map.value.addLayer(cartoLight);
+            }
+        }
+    });
+
     // Overlay Layers (Optional Layers)
     const googleTraffic = L.tileLayer('https://mt0.google.com/vt?lyrs=h@159000000,traffic|seconds_into_week:-1&style=3&x={x}&y={y}&z={z}', {
         attribution: '&copy; Google'
@@ -296,8 +310,39 @@ onMounted(() => {
         setTimeout(() => {
             const btnAddRoute = popupNode.querySelector('.btn-add-route');
             const btnComments = popupNode.querySelector('.btn-comments');
+            const btnFavorite = popupNode.querySelector('.btn-favorite');
+            const weatherContainer = popupNode.querySelector('.weather-info');
 
             if (btnAddRoute) {
+                // Weather Logic
+                if (weatherContainer) {
+                     const lat = parseFloat(btnAddRoute.dataset.lat);
+                     const lng = parseFloat(btnAddRoute.dataset.lng);
+                     
+                     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const weather = data.current_weather;
+                            const temp = weather.temperature;
+                            const code = weather.weathercode;
+                            
+                            // Simple WMO code mapping
+                            let icon = '☀️';
+                            if (code === 1 || code === 2 || code === 3) icon = '⛅';
+                            else if (code === 45 || code === 48) icon = '🌫️';
+                            else if (code >= 51 && code <= 67) icon = '🌧️';
+                            else if (code >= 71 && code <= 77) icon = '❄️';
+                            else if (code >= 80 && code <= 82) icon = '🌦️';
+                            else if (code >= 95) icon = '⛈️';
+
+                            weatherContainer.innerHTML = `<span class="font-medium text-slate-700 dark:text-slate-300">${icon} ${temp}°C</span>`;
+                        })
+                        .catch(err => {
+                            console.error('Weather error:', err);
+                            weatherContainer.innerHTML = '<span class="text-red-400 text-[10px]">Hava durumu yok</span>';
+                        });
+                }
+
                 // Remove old listeners to prevent duplicates if any
                 L.DomEvent.off(btnAddRoute, 'click');
                 
@@ -323,6 +368,16 @@ onMounted(() => {
                     
                     const id = parseInt(btnComments.dataset.id);
                     emit('view-comments', id);
+                });
+            }
+
+            if (btnFavorite) {
+                L.DomEvent.off(btnFavorite, 'click');
+                L.DomEvent.on(btnFavorite, 'click', (ev: any) => {
+                    L.DomEvent.stopPropagation(ev);
+                    L.DomEvent.preventDefault(ev);
+                    const id = parseInt(btnFavorite.dataset.id);
+                    emit('toggle-favorite', id);
                 });
             }
         }, 100);
@@ -407,10 +462,20 @@ function updateMarkers() {
             ${imageHtml}
             <div class="popup-header">
                 <span class="popup-category">${getCategoryEmoji(place.category)} ${t(`categories.${place.category}`)}</span>
-                <span class="popup-city">📍 ${place.city}</span>
+                <button class="btn-favorite bg-transparent border-none cursor-pointer p-1 transition-transform active:scale-75" data-id="${place.id}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="${place.is_favorite ? '#ef4444' : 'none'}" stroke="${place.is_favorite ? '#ef4444' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex justify-between items-center mb-1">
+                <span class="popup-city text-[10px] text-slate-400">📍 ${place.city}</span>
             </div>
             <h3>${placeName}</h3>
             <p>${placeDesc}</p>
+            <div class="weather-info mt-2 text-xs text-slate-500 flex items-center gap-1">
+                <span class="weather-loading">🌤️ Hava durumu yükleniyor...</span>
+            </div>
             <button class="btn-add-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white border-none py-2.5 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}" data-name="${placeName}">
                 🚩 Rotaya Ekle
             </button>
