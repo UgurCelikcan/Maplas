@@ -29,6 +29,7 @@ type Place struct {
 	City        string            `json:"city"`
 	ImageURL    string            `json:"imageUrl"`
 	Status      string            `json:"status"` // 'pending' or 'approved'
+	IsFavorite  bool              `json:"is_favorite"`
 }
 
 type PlaceRequest struct {
@@ -142,6 +143,12 @@ func initDB() {
 		username TEXT UNIQUE NOT NULL,
 		password TEXT NOT NULL,
 		role TEXT DEFAULT 'user'
+	);
+
+	CREATE TABLE IF NOT EXISTS favorites (
+		user_id INT REFERENCES users(id) ON DELETE CASCADE,
+		place_id INT REFERENCES places(id) ON DELETE CASCADE,
+		PRIMARY KEY (user_id, place_id)
 	);
 	`
 
@@ -278,15 +285,37 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 	enableCors(w)
 	if r.Method == "OPTIONS" { return }
 	if r.Method == "GET" {
+		authHeader := r.Header.Get("Authorization")
+		var userID int
+		if authHeader != "" {
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := validateToken(tokenStr)
+			if err == nil {
+				db.QueryRow("SELECT id FROM users WHERE username=$1", claims.Username).Scan(&userID)
+			}
+		}
+
 		latStr := r.URL.Query().Get("lat")
 		lngStr := r.URL.Query().Get("lng")
 		radiusStr := r.URL.Query().Get("radius")
-		query := "SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM places WHERE status = 'approved'"
-		args := []interface{}{}
+		
+		query := `
+			SELECT p.id, p.name, p.description, p.lat, p.lng, p.category, p.city, COALESCE(p.image_url, '') as image_url, p.status,
+			EXISTS(SELECT 1 FROM favorites f WHERE f.place_id = p.id AND f.user_id = $1) as is_favorite
+			FROM places p WHERE p.status = 'approved'`
+		
+		args := []interface{}{userID}
 		if latStr != "" && lngStr != "" && radiusStr != "" {
-			query = `SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM (SELECT *, (6371 * acos(cos(radians($1)) * cos(radians(lat)) * cos(radians(lng) - radians($2)) + sin(radians($1)) * sin(radians(lat)))) AS distance FROM places WHERE status = 'approved') AS p WHERE distance < $3 ORDER BY distance ASC`
+			query = `
+				SELECT id, name, description, lat, lng, category, city, image_url, status, is_favorite
+				FROM (
+					SELECT p.*, (6371 * acos(cos(radians($2)) * cos(radians(lat)) * cos(radians(lng) - radians($3)) + sin(radians($2)) * sin(radians(lat)))) AS distance,
+					EXISTS(SELECT 1 FROM favorites f WHERE f.place_id = p.id AND f.user_id = $1) as is_favorite
+					FROM places p WHERE status = 'approved'
+				) AS p WHERE distance < $4 ORDER BY distance ASC`
 			args = append(args, latStr, lngStr, radiusStr)
 		} else { query += " ORDER BY id DESC" }
+
 		rows, err := db.Query(query, args...)
 		if err != nil { http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError); return }
 		defer rows.Close()
@@ -294,7 +323,7 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var p Place
 			var nameJSON, descJSON []byte
-			rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status)
+			rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status, &p.IsFavorite)
 			json.Unmarshal(nameJSON, &p.Name)
 			json.Unmarshal(descJSON, &p.Description)
 			places = append(places, p)
@@ -496,6 +525,49 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func favoritesHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method == "OPTIONS" { return }
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" { http.Error(w, "Missing authorization header", http.StatusUnauthorized); return }
+	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := validateToken(tokenStr)
+	if err != nil { http.Error(w, "Invalid token", http.StatusUnauthorized); return }
+	var userID int
+	db.QueryRow("SELECT id FROM users WHERE username=$1", claims.Username).Scan(&userID)
+
+	if r.Method == "GET" {
+		rows, err := db.Query(`
+			SELECT p.id, p.name, p.description, p.lat, p.lng, p.category, p.city, COALESCE(p.image_url, ''), p.status 
+			FROM places p 
+			JOIN favorites f ON p.id = f.place_id 
+			WHERE f.user_id = $1`, userID)
+		if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
+		defer rows.Close()
+		var places []Place
+		for rows.Next() {
+			var p Place
+			var nameJSON, descJSON []byte
+			rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status)
+			json.Unmarshal(nameJSON, &p.Name)
+			json.Unmarshal(descJSON, &p.Description)
+			places = append(places, p)
+		}
+		json.NewEncoder(w).Encode(places)
+	} else if r.Method == "POST" {
+		var req struct { PlaceID int `json:"place_id"` }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "Invalid request", http.StatusBadRequest); return }
+		_, err = db.Exec("INSERT INTO favorites (user_id, place_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", userID, req.PlaceID)
+		if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
+		w.WriteHeader(http.StatusCreated)
+	} else if r.Method == "DELETE" {
+		placeID := r.URL.Query().Get("place_id")
+		_, err = db.Exec("DELETE FROM favorites WHERE user_id = $1 AND place_id = $2", userID, placeID)
+		if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func main() {
 	initDB()
 	os.MkdirAll("uploads", os.ModePerm)
@@ -508,6 +580,7 @@ func main() {
 	http.HandleFunc("/api/comments", commentsHandler)
 	http.HandleFunc("/api/admin", adminHandler)
 	http.HandleFunc("/api/user", userHandler)
+	http.HandleFunc("/api/favorites", favoritesHandler)
 	fmt.Println("Server starting on port 8080...")
 	http.ListenAndServe(":8080", nil)
 }

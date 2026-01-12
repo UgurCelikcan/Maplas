@@ -39,7 +39,10 @@
     "user": "Kullanıcı",
     "add_new": "Yeni Ekle",
     "no_results": "Aradığınız kriterlere uygun yer bulunamadı.",
-    "clear_filters": "Filtreleri Temizle"
+    "clear_filters": "Filtreleri Temizle",
+    "favorites": "Favorilerim",
+    "add_favorite": "Favorilere Ekle",
+    "remove_favorite": "Favorilerden Çıkar"
   },
   "place": {
     "add_title": "Yeni Yer Ekle",

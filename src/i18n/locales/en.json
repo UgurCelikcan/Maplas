@@ -39,7 +39,10 @@
     "user": "User",
     "add_new": "Add New",
     "no_results": "No places found matching your criteria.",
-    "clear_filters": "Clear Filters"
+    "clear_filters": "Clear Filters",
+    "favorites": "My Favorites",
+    "add_favorite": "Add to Favorites",
+    "remove_favorite": "Remove from Favorites"
   },
   "place": {
     "add_title": "Add New Place",

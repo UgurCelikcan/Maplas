@@ -43,4 +43,27 @@ export const getAdminStats = async () => {
     return response.data;
 };
 
+export const toggleFavorite = async (placeId: number, isFavorite: boolean) => {
+    if (isFavorite) {
+        await api.delete(`/favorites?place_id=${placeId}`);
+    } else {
+        await api.post('/favorites', { place_id: placeId });
+    }
+};
+
+export const getFavorites = async () => {
+    const response = await api.get<any[]>('/favorites');
+    return response.data;
+};
+
+export const translateText = async (text: string, from: string, to: string) => {
+    try {
+        const response = await axios.get(`https://lingva.dialectapp.org/api/v1/${from}/${to}/${encodeURIComponent(text)}`);
+        return response.data.translation;
+    } catch (error) {
+        console.error('Translation error:', error);
+        return null;
+    }
+};
+
 export default api;

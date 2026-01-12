@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue';
+import { computed, inject, ref, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { getLocalizedContent } from '../utils';
+import { translateText } from '../api';
+import { getUserPoints, getUserRank } from '../gamification';
 
 const { t, locale } = useI18n();
 
@@ -14,6 +16,7 @@ interface Place {
   category: string;
   city: string;
   imageUrl?: string;
+  is_favorite?: boolean;
 }
 
 const props = defineProps<{
@@ -25,10 +28,12 @@ const props = defineProps<{
   searchQuery: string;
   selectedCategories: string[];
   selectedCity: string;
+  showFavoritesOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'select-place', id: number): void;
+  (e: 'toggle-favorite', id: number): void;
   (e: 'toggle-theme'): void;
   (e: 'add-click'): void;
   (e: 'delete-place', id: number): void;
@@ -43,6 +48,7 @@ const emit = defineEmits<{
   (e: 'update:searchQuery', value: string): void;
   (e: 'update:selectedCategories', value: string[]): void;
   (e: 'update:selectedCity', value: string): void;
+  (e: 'update:showFavoritesOnly', value: boolean): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
@@ -108,6 +114,7 @@ function clearFilters() {
     emit('update:searchQuery', '');
     emit('update:selectedCategories', []);
     emit('update:selectedCity', '');
+    emit('update:showFavoritesOnly', false);
 }
 
 function onSelect(id: number) {
@@ -130,6 +137,79 @@ function getCategoryEmoji(category: string) {
     default: return '📍';
   }
 }
+
+const categorySlider = ref<HTMLElement | null>(null);
+const translatedDescriptions = ref<Record<number, string>>({});
+const isTranslating = ref<Record<number, boolean>>({});
+
+// Auto-translate visible places when list changes OR locale changes
+watch([() => props.visiblePlaces, locale], async ([newPlaces, newLocale]) => {
+    // Clear old translations on locale change to force re-fetch
+    // We compare with a stored 'lastLocale' or just clear if the watcher triggers primarily due to locale
+    // Ideally we just re-translate everything visible.
+    
+    for (const place of newPlaces as Place[]) {
+        if (!place.id) continue;
+        
+        const originalText = getLocalizedContent(place.description, newLocale as string);
+        
+        // Skip if empty
+        if (!originalText) continue;
+
+        try {
+            isTranslating.value[place.id] = true;
+            // Translate from auto to current locale
+            const translated = await translateText(originalText, 'auto', newLocale as string);
+            
+            // Only update if different (avoid flashing or redundant updates)
+            if (translated && translated !== originalText) {
+                translatedDescriptions.value[place.id] = translated;
+            } else {
+                // If translation is same as original (e.g. source was same language), 
+                // we might want to clear the 'translated' state so it shows as original.
+                delete translatedDescriptions.value[place.id];
+            }
+        } catch (e) {
+            // silent fail
+        } finally {
+            isTranslating.value[place.id] = false;
+        }
+    }
+}, { immediate: true, deep: true });
+
+onMounted(() => {
+    const slider = categorySlider.value;
+    if (!slider) return;
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    slider.addEventListener('mousedown', (e) => {
+        isDown = true;
+        slider.classList.add('active');
+        startX = e.pageX - slider.offsetLeft;
+        scrollLeft = slider.scrollLeft;
+    });
+
+    slider.addEventListener('mouseleave', () => {
+        isDown = false;
+        slider.classList.remove('active');
+    });
+
+    slider.addEventListener('mouseup', () => {
+        isDown = false;
+        slider.classList.remove('active');
+    });
+
+    slider.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - slider.offsetLeft;
+        const walk = (x - startX) * 2; // scroll-fast
+        slider.scrollLeft = scrollLeft - walk;
+    });
+});
 </script>
 
 <template>
@@ -192,8 +272,16 @@ function getCategoryEmoji(category: string) {
                 <!-- Profile Dropdown -->
                 <div v-if="showProfileMenu" class="absolute right-0 top-11 w-56 bg-white/95 dark:bg-zinc-800/95 backdrop-blur-md border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-xl z-[100] overflow-hidden flex flex-col py-1" @click="showProfileMenu = false">
                     <div class="px-4 py-3 border-b border-slate-100 dark:border-zinc-700/50 bg-slate-50/50 dark:bg-zinc-900/50">
-                        <p class="m-0 text-sm font-bold truncate text-slate-900 dark:text-white">{{ currentUser.username }}</p>
-                        <p class="m-0 text-xs font-medium text-slate-500 dark:text-zinc-500 mt-0.5">{{ currentUser.role === 'admin' ? `${t('ui.admin')} 🛡️` : t('ui.user') }}</p>
+                        <div class="flex items-center justify-between">
+                            <p class="m-0 text-sm font-bold truncate text-slate-900 dark:text-white">{{ currentUser.username }}</p>
+                            <span class="text-xs font-bold" :class="getUserRank(getUserPoints(currentUser)).color">
+                                {{ getUserRank(getUserPoints(currentUser)).icon }}
+                            </span>
+                        </div>
+                        <p class="m-0 text-[10px] font-medium text-slate-500 dark:text-zinc-500 mt-0.5 flex justify-between">
+                            <span>{{ getUserRank(getUserPoints(currentUser)).title }}</span>
+                            <span class="font-mono text-emerald-600 dark:text-emerald-400">{{ getUserPoints(currentUser) }} XP</span>
+                        </p>
                     </div>
                     <button v-if="currentUser.role === 'admin'" @click="$emit('open-admin')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
                         <span>🛡️</span> {{ t('ui.admin_panel') }}
@@ -240,33 +328,61 @@ function getCategoryEmoji(category: string) {
             </button>
         </div>
         
-        <div class="flex gap-2 overflow-x-auto pb-2 -mb-2 pt-1 scrollbar-hide items-center mask-fade-right">
-            <button class="px-3.5 py-1.5 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 text-xs font-bold whitespace-nowrap hover:bg-emerald-600 hover:scale-105 transition-all cursor-pointer flex-shrink-0 flex items-center gap-1" @click="$emit('add-click')">
-                <span>+</span> {{ t('ui.add_new') }}
-            </button>
-            <div class="w-[1px] bg-slate-200 dark:bg-zinc-700 mx-1 h-5 self-center flex-shrink-0"></div>
-            
-            <button 
-                v-if="searchQuery || selectedCategories.length > 0 || selectedCity"
-                @click="clearFilters"
-                class="px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/30 text-[10px] font-bold uppercase tracking-wider flex-shrink-0 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors cursor-pointer"
-            >
-                ✕ {{ t('ui.clear_filters') }}
-            </button>
+                        <div class="relative mt-1">
+        
+                            <div ref="categorySlider" class="flex gap-2 overflow-x-auto pb-3 -mb-3 pt-1 items-center snap-x snap-mandatory touch-pan-x" id="category-slider">
+        
+                                <button  
+        
+                            class="px-4 py-2 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 text-xs font-bold whitespace-nowrap hover:bg-emerald-600 hover:scale-105 transition-all cursor-pointer flex-shrink-0 flex items-center gap-1.5 snap-start" @click="$emit('add-click')">
+        
+                            <span>+</span> {{ t('ui.add_new') }}
+        
+                        </button>
+                
+                <div class="w-px bg-slate-200 dark:bg-zinc-700 mx-1 h-5 self-center flex-shrink-0"></div>
+                
+                <button 
+                    v-if="searchQuery || selectedCategories.length > 0 || selectedCity || showFavoritesOnly"
+                    @click="clearFilters"
+                    class="px-4 py-2 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/30 text-[10px] font-bold uppercase tracking-wider flex-shrink-0 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors cursor-pointer snap-start"
+                >
+                    ✕ {{ t('ui.clear_filters') }}
+                </button>
 
-            <button 
-                v-for="cat in categories" 
-                :key="cat"
-                class="px-3.5 py-1.5 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all flex-shrink-0 select-none active:scale-95"
-                :class="[
-                selectedCategories.includes(cat) 
-                    ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 shadow-lg' 
-                    : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700'
-                ]"
-                @click="toggleCategory(cat)"
-            >
-                {{ t(`categories.${cat}`) }}
-            </button>
+                <button 
+                    v-if="currentUser"
+                    class="px-4 py-2 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all flex-shrink-0 select-none active:scale-95 snap-start"
+                    :class="[
+                    showFavoritesOnly 
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' 
+                        : 'bg-red-50 dark:bg-red-900/10 text-red-500 hover:bg-red-100'
+                    ]"
+                    @click="$emit('update:showFavoritesOnly', !showFavoritesOnly)"
+                >
+                    ❤️ {{ t('ui.favorites') }}
+                </button>
+                
+                <button 
+                    v-for="cat in categories" 
+                    :key="cat"
+                    class="px-4 py-2 rounded-full border border-transparent whitespace-nowrap text-xs font-medium cursor-pointer transition-all flex-shrink-0 select-none active:scale-95 snap-start"
+                    :class="[
+                    selectedCategories.includes(cat) 
+                        ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 shadow-lg' 
+                        : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700'
+                    ]"
+                    @click="toggleCategory(cat)"
+                >
+                    {{ t(`categories.${cat}`) }}
+                </button>
+                <!-- Extra space at end for better scroll experience -->
+                <div class="w-8 h-1 flex-shrink-0"></div>
+            </div>
+            
+            <!-- Fade Indicators -->
+            <div class="absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-white dark:from-zinc-900 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white dark:from-zinc-900 to-transparent pointer-events-none"></div>
         </div>
       </div>
     </div>
@@ -296,16 +412,41 @@ function getCategoryEmoji(category: string) {
                  <span class="text-xl">{{ getCategoryEmoji(place.category) }}</span>
             </div>
 
-            <div class="flex items-center gap-3 mb-3">
-                <span class="text-xs font-semibold text-slate-500 dark:text-zinc-400 flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                    {{ place.city }}
-                </span>
-                <span class="w-1 h-1 rounded-full bg-slate-300 dark:bg-zinc-700"></span>
-                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">{{ t(`categories.${place.category}`) }}</span>
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-semibold text-slate-500 dark:text-zinc-400 flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        {{ place.city }}
+                    </span>
+                    <span class="w-1 h-1 rounded-full bg-slate-300 dark:bg-zinc-700"></span>
+                    <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">{{ t(`categories.${place.category}`) }}</span>
+                </div>
+                
+                <button 
+                    @click.stop="$emit('toggle-favorite', place.id as number)" 
+                    class="w-8 h-8 flex items-center justify-center rounded-full transition-all hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-75 group/heart"
+                    :title="place.is_favorite ? t('ui.remove_favorite', 'Favorilerden Çıkar') : t('ui.add_favorite', 'Favorilere Ekle')"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" :viewBox="place.is_favorite ? '0 0 24 24' : '0 0 24 24'" :fill="place.is_favorite ? '#ef4444' : 'none'" :stroke="place.is_favorite ? '#ef4444' : 'currentColor'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-colors" :class="place.is_favorite ? '' : 'text-slate-300 group-hover/heart:text-red-400'">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </button>
             </div>
             
-            <p class="m-0 text-sm text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-2 mb-4">{{ getLocalizedContent(place.description, locale) }}</p>
+            <div class="relative">
+                <p class="m-0 text-sm text-slate-600 dark:text-zinc-400 leading-relaxed line-clamp-3 mb-2 transition-all">
+                    {{ translatedDescriptions[place.id as number] || getLocalizedContent(place.description, locale) }}
+                </p>
+                <!-- Translation Indicator / Toggle -->
+                <button 
+                    v-if="translatedDescriptions[place.id as number]"
+                    @click.stop="delete translatedDescriptions[place.id as number]" 
+                    class="absolute bottom-0 right-0 bg-slate-50/90 dark:bg-zinc-900/90 backdrop-blur px-1.5 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30 rounded cursor-pointer hover:bg-emerald-50"
+                    title="Otomatik çevrildi. Orijinalini görmek için tıkla."
+                >
+                    🌐 Çevrildi
+                </button>
+            </div>
 
             <div class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                 <button class="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors" @click.stop="$emit('edit-place', place)">
@@ -331,11 +472,5 @@ function getCategoryEmoji(category: string) {
 </template>
 
 <style scoped>
-.scrollbar-hide::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
+/* Scoped styles if needed */
 </style>

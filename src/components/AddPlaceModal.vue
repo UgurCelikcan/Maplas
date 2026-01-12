@@ -120,6 +120,7 @@ async function handleFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
         const file = target.files[0];
+        if (!file) return;
         
         if (file.size > 10 * 1024 * 1024) {
             alert('File too large (Max 10MB)');

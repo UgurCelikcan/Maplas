@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
+import { getUserPoints, getUserRank, getNextRank, getProgress } from '../gamification';
 
 const { t } = useI18n();
 
@@ -16,11 +17,19 @@ interface UserProfile {
   email: string;
   bio: string;
   avatar_url: string;
+  points?: number; // Backend might not send this yet, handled by util
 }
 
 const user = ref<UserProfile | null>(null);
 const loading = ref(true);
 const isEditing = ref(false);
+
+// Gamification Stats
+const points = computed(() => user.value ? getUserPoints(user.value) : 0);
+const rank = computed(() => getUserRank(points.value));
+const nextRank = computed(() => getNextRank(points.value));
+const progress = computed(() => getProgress(points.value));
+
 const editForm = ref({
   email: '',
   bio: '',
@@ -96,11 +105,34 @@ onMounted(() => {
               <span v-else>👤</span>
             </div>
             <div class="text-center">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ user.username }}</h3>
-              <span class="inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-400 mt-1">
-                {{ user.role }}
-              </span>
+              <h3 class="text-xl font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2">
+                  {{ user.username }} 
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-700 text-slate-500 font-normal" v-if="user.role === 'admin'">Admin</span>
+              </h3>
+              <div class="mt-2 flex flex-col items-center">
+                  <span class="text-2xl" :title="rank.title">{{ rank.icon }}</span>
+                  <span class="font-bold text-sm" :class="rank.color">{{ rank.title }}</span>
+                  <span class="text-[10px] text-slate-400 font-mono">{{ points }} XP</span>
+              </div>
             </div>
+          </div>
+
+          <!-- Gamification Progress -->
+          <div class="bg-slate-50 dark:bg-zinc-700/30 p-4 rounded-xl relative overflow-hidden">
+             <div class="flex justify-between text-xs font-bold text-slate-500 dark:text-zinc-400 mb-1">
+                 <span>İlerleme</span>
+                 <span v-if="nextRank">{{ points }} / {{ nextRank.minPoints }} XP</span>
+                 <span v-else>MAX</span>
+             </div>
+             <div class="w-full h-2.5 bg-slate-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                 <div class="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-1000 ease-out" :style="{ width: `${progress}%` }"></div>
+             </div>
+             <div class="mt-2 text-[10px] text-slate-400 text-center" v-if="nextRank">
+                 Sonraki rütbe <strong>{{ nextRank.title }}</strong> için {{ nextRank.minPoints - points }} XP daha kazanmalısın!
+             </div>
+             <div class="mt-2 text-[10px] text-emerald-500 font-bold text-center" v-else>
+                 🏆 Zirvedesin! Harita Efsanesi sensin.
+             </div>
           </div>
 
           <!-- View Mode -->

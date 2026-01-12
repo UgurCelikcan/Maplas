@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, provide, watch, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import api, { getNearbyPlaces } from './api';
+import api, { getNearbyPlaces, toggleFavorite } from './api';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
 import AddPlaceModal from './components/AddPlaceModal.vue';
@@ -23,6 +23,7 @@ interface Place {
   category: string;
   city: string;
   imageUrl?: string;
+  is_favorite?: boolean;
 }
 
 interface User {
@@ -48,6 +49,7 @@ const isSidebarOpen = ref(false);
 const searchQuery = ref('');
 const selectedCategories = ref<string[]>([]);
 const selectedCity = ref<string>('');
+const showFavoritesOnly = ref(false);
 
 const filteredPlaces = computed(() => {
   return places.value.filter(place => {
@@ -59,7 +61,9 @@ const filteredPlaces = computed(() => {
     
     const matchesCity = selectedCity.value === '' || place.city === selectedCity.value;
 
-    return matchesSearch && matchesCategory && matchesCity;
+    const matchesFavorites = !showFavoritesOnly.value || place.is_favorite;
+
+    return matchesSearch && matchesCategory && matchesCity && matchesFavorites;
   });
 });
 
@@ -85,6 +89,14 @@ function checkAuth() {
 onMounted(() => {
   checkAuth();
   fetchPlaces();
+  
+  // Auto-theme based on time
+  const hour = new Date().getHours();
+  if (hour >= 19 || hour < 7) {
+      isDarkMode.value = true;
+  } else {
+      isDarkMode.value = false;
+  }
 });
 
 function handleLoginSuccess(user: User, token: string) {
@@ -124,7 +136,7 @@ async function handleSavePlace(placeData: Place) {
     } else {
         const response = await api.post<Place>('/places', placeData);
         if (response.status === 201) {
-             alert(t('place.pending_approval'));
+             alert(`🎉 ${t('place.pending_approval')}\n\n🌟 +50 XP Kazandın! (Onaylanınca hesabına işlenecek)`);
         }
     }
     showModal.value = false;
@@ -155,6 +167,23 @@ async function handleDeletePlace(id: number) {
 
 function handleSelectPlace(id: number) {
   selectedPlaceId.value = id;
+}
+
+async function handleToggleFavorite(id: number) {
+  if (!currentUser.value) {
+    showAuthModal.value = true;
+    return;
+  }
+
+  const place = places.value.find(p => p.id === id);
+  if (place) {
+    try {
+      await toggleFavorite(id, !!place.is_favorite);
+      place.is_favorite = !place.is_favorite;
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
+  }
 }
 
 function handleViewComments(id: number) {
@@ -228,6 +257,7 @@ watch(isDarkMode, (newVal) => {
       v-model:searchQuery="searchQuery"
       v-model:selectedCategories="selectedCategories"
       v-model:selectedCity="selectedCity"
+      v-model:showFavoritesOnly="showFavoritesOnly"
       :selected-place-id="selectedPlaceId"
       :current-user="currentUser"
       :is-open="isSidebarOpen"
@@ -243,12 +273,14 @@ watch(isDarkMode, (newVal) => {
       @close-sidebar="isSidebarOpen = false"
       @open-about="showAboutModal = true"
       @search-nearby="handleNearbySearch"
+      @toggle-favorite="handleToggleFavorite"
     />
     <MapDisplay 
       :places="filteredPlaces" 
       :selected-place-id="selectedPlaceId" 
       @select-place="handleSelectPlace"
       @view-comments="handleViewComments"
+      @toggle-favorite="handleToggleFavorite"
     />
 
 
@@ -260,9 +292,9 @@ watch(isDarkMode, (newVal) => {
 
     <AddPlaceModal 
       v-if="showModal" 
-      :initial-data="editingPlace"
+      :initial-data="editingPlace as any"
       @close="showModal = false" 
-      @save-place="handleSavePlace" 
+      @save-place="(p: any) => handleSavePlace(p)" 
     />
 
     <CommentsModal

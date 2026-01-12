@@ -3,6 +3,7 @@ import { onMounted, ref, watch, shallowRef, inject } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { getLocalizedContent } from '../utils';
+import { translateText } from '../api';
 
 const { t, locale } = useI18n();
 
@@ -35,7 +36,6 @@ const mapContainer = ref<HTMLElement | null>(null);
 const map = shallowRef<L.Map | null>(null);
 const markerClusterGroup = shallowRef<any>(null);
 const markersMap = shallowRef<Map<number, L.Marker>>(new Map());
-const tileLayer = shallowRef<L.TileLayer | null>(null);
 const routingControl = shallowRef<any>(null);
 const userLocation = ref<{ lat: number; lng: number } | null>(null);
 const userMarker = shallowRef<L.Marker | null>(null);
@@ -144,11 +144,15 @@ function removeWaypoint(index: number) {
 function moveWaypoint(index: number, direction: 'up' | 'down') {
     if (direction === 'up' && index > 0) {
         const temp = routeWaypoints.value[index];
+        // @ts-ignore
         routeWaypoints.value[index] = routeWaypoints.value[index - 1];
+        // @ts-ignore
         routeWaypoints.value[index - 1] = temp;
     } else if (direction === 'down' && index < routeWaypoints.value.length - 1) {
         const temp = routeWaypoints.value[index];
+        // @ts-ignore
         routeWaypoints.value[index] = routeWaypoints.value[index + 1];
+        // @ts-ignore
         routeWaypoints.value[index + 1] = temp;
     }
     updateRouteDisplay();
@@ -271,6 +275,11 @@ onMounted(() => {
         }
     });
 
+    // Re-render markers (and thus popups) when locale changes to update text
+    watch(locale, () => {
+        updateMarkers();
+    });
+
     // Overlay Layers (Optional Layers)
     const googleTraffic = L.tileLayer('https://mt0.google.com/vt?lyrs=h@159000000,traffic|seconds_into_week:-1&style=3&x={x}&y={y}&z={z}', {
         attribution: '&copy; Google'
@@ -312,6 +321,17 @@ onMounted(() => {
             const btnComments = popupNode.querySelector('.btn-comments');
             const btnFavorite = popupNode.querySelector('.btn-favorite');
             const weatherContainer = popupNode.querySelector('.weather-info');
+            const descContainer = popupNode.querySelector('p'); // The description paragraph
+
+            if (descContainer) {
+                const originalText = descContainer.innerText;
+                // Auto-translate description in popup
+                translateText(originalText, 'auto', locale.value).then(translated => {
+                    if (translated && translated !== originalText) {
+                         descContainer.innerHTML = `${translated} <span class="text-[9px] text-emerald-500 font-bold ml-1 bg-emerald-50 px-1 rounded border border-emerald-100 cursor-help" title="Otomatik Çevrildi">🌐</span>`;
+                    }
+                }).catch(() => {});
+            }
 
             if (btnAddRoute) {
                 // Weather Logic
@@ -344,6 +364,7 @@ onMounted(() => {
                 }
 
                 // Remove old listeners to prevent duplicates if any
+                // @ts-ignore
                 L.DomEvent.off(btnAddRoute, 'click');
                 
                 L.DomEvent.on(btnAddRoute, 'click', (ev: any) => {
@@ -360,6 +381,7 @@ onMounted(() => {
             }
             
             if (btnComments) {
+                // @ts-ignore
                 L.DomEvent.off(btnComments, 'click');
                 
                 L.DomEvent.on(btnComments, 'click', (ev: any) => {
@@ -372,6 +394,7 @@ onMounted(() => {
             }
 
             if (btnFavorite) {
+                // @ts-ignore
                 L.DomEvent.off(btnFavorite, 'click');
                 L.DomEvent.on(btnFavorite, 'click', (ev: any) => {
                     L.DomEvent.stopPropagation(ev);
