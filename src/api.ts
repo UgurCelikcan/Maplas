@@ -16,6 +16,18 @@ api.interceptors.request.use(config => {
   return config;
 });
 
+// Handle 401 Unauthorized globally
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response && error.response.status === 401) {
+      // Dispatch a custom event that App.vue can listen to
+      window.dispatchEvent(new CustomEvent('auth-error'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const uploadImage = async (file: File) => {
   const formData = new FormData();
   formData.append('image', file);
@@ -43,8 +55,8 @@ export const getAdminStats = async () => {
     return response.data;
 };
 
-export const toggleFavorite = async (placeId: number, isFavorite: boolean) => {
-    if (isFavorite) {
+export const setFavoriteStatus = async (placeId: number, shouldBeFavorite: boolean) => {
+    if (!shouldBeFavorite) {
         await api.delete(`/favorites?place_id=${placeId}`);
     } else {
         await api.post('/favorites', { place_id: placeId });
@@ -53,6 +65,11 @@ export const toggleFavorite = async (placeId: number, isFavorite: boolean) => {
 
 export const getFavorites = async () => {
     const response = await api.get<any[]>('/favorites');
+    return response.data;
+};
+
+export const getLeaderboard = async () => {
+    const response = await api.get<any[]>('/leaderboard');
     return response.data;
 };
 

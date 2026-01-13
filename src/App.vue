@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, provide, watch, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import api, { getNearbyPlaces, toggleFavorite } from './api';
+import api, { getNearbyPlaces, setFavoriteStatus } from './api';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
 import AddPlaceModal from './components/AddPlaceModal.vue';
@@ -10,6 +10,8 @@ import AuthModal from './components/AuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
 import AboutModal from './components/AboutModal.vue';
 import UserProfile from './components/UserProfile.vue';
+import LeaderboardModal from './components/LeaderboardModal.vue';
+import SmartPlannerModal from './components/SmartPlannerModal.vue';
 import { getLocalizedContent } from './utils';
 
 const { t, locale } = useI18n();
@@ -40,10 +42,14 @@ const showAuthModal = ref(false);
 const showAdminDashboard = ref(false);
 const showAboutModal = ref(false);
 const showProfileModal = ref(false);
+const showLeaderboardModal = ref(false);
+const showSmartPlannerModal = ref(false);
 const currentUser = ref<User | null>(null);
 const commentPlace = ref<{id: number, name: string} | null>(null);
 const editingPlace = ref<Place | undefined>(undefined);
 const isSidebarOpen = ref(false);
+const mapDisplayRef = ref<any>(null);
+const currentUserLocation = ref<{lat: number, lng: number} | null>(null);
 
 // Filter States
 const searchQuery = ref('');
@@ -97,6 +103,15 @@ onMounted(() => {
   } else {
       isDarkMode.value = false;
   }
+
+  // Listen for global auth errors (token expired)
+  window.addEventListener('auth-error', () => {
+      if (currentUser.value) {
+          handleLogout();
+          showAuthModal.value = true;
+          alert("Oturum süreniz doldu. Lütfen tekrar giriş yapın.");
+      }
+  });
 });
 
 function handleLoginSuccess(user: User, token: string) {
@@ -169,19 +184,42 @@ function handleSelectPlace(id: number) {
   selectedPlaceId.value = id;
 }
 
+function handleSmartRoute(places: Place[]) {
+    if (mapDisplayRef.value) {
+        mapDisplayRef.value.setRoute(places);
+    }
+    showSmartPlannerModal.value = false;
+    isSidebarOpen.value = false; // Close sidebar on mobile to show map
+}
+
 async function handleToggleFavorite(id: number) {
   if (!currentUser.value) {
     showAuthModal.value = true;
     return;
   }
 
-  const place = places.value.find(p => p.id === id);
-  if (place) {
+  const index = places.value.findIndex(p => p.id === id);
+  if (index !== -1) {
+    const place = places.value[index]!;
+    const newStatus = !place.is_favorite;
+    
+    // Optimistic update
+    // We create a new object reference to trigger reactivity
+    places.value[index] = { ...place, is_favorite: newStatus } as Place;
+    
+    // Force reactivity for deep watchers if any (Vue sometimes misses array item updates if not done carefully)
+    places.value = [...places.value];
+
     try {
-      await toggleFavorite(id, !!place.is_favorite);
-      place.is_favorite = !place.is_favorite;
-    } catch (error) {
+      await setFavoriteStatus(id, newStatus);
+    } catch (error: any) {
       console.error('Error toggling favorite:', error);
+      // Revert on error
+      places.value[index] = { ...place, is_favorite: !newStatus } as Place;
+      places.value = [...places.value];
+      
+      const errorMessage = error.response?.data || error.message || "Bilinmeyen hata";
+      alert(`Favori işlemi başarısız oldu:\n${errorMessage}`);
     }
   }
 }
@@ -270,17 +308,21 @@ watch(isDarkMode, (newVal) => {
       @logout="handleLogout"
       @open-admin="showAdminDashboard = true"
       @open-profile="showProfileModal = true"
+      @open-leaderboard="showLeaderboardModal = true"
+      @open-smart-planner="showSmartPlannerModal = true"
       @close-sidebar="isSidebarOpen = false"
       @open-about="showAboutModal = true"
       @search-nearby="handleNearbySearch"
       @toggle-favorite="handleToggleFavorite"
     />
     <MapDisplay 
+      ref="mapDisplayRef"
       :places="filteredPlaces" 
       :selected-place-id="selectedPlaceId" 
       @select-place="handleSelectPlace"
       @view-comments="handleViewComments"
       @toggle-favorite="handleToggleFavorite"
+      @location-updated="(loc) => currentUserLocation = loc"
     />
 
 
@@ -288,6 +330,19 @@ watch(isDarkMode, (newVal) => {
     <UserProfile
       v-if="showProfileModal"
       @close="showProfileModal = false"
+    />
+    
+    <LeaderboardModal
+      v-if="showLeaderboardModal"
+      @close="showLeaderboardModal = false"
+    />
+
+    <SmartPlannerModal
+      v-if="showSmartPlannerModal"
+      :places="places"
+      :user-location="currentUserLocation"
+      @close="showSmartPlannerModal = false"
+      @create-route="handleSmartRoute"
     />
 
     <AddPlaceModal 

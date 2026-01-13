@@ -44,8 +44,12 @@ const fetchStats = async () => {
     loading.value = true;
     try {
         stats.value = await getAdminStats();
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error fetching stats:', error);
+        if (error.response && error.response.status === 403) {
+            alert("Bu alana erişim yetkiniz yok.");
+            emit('close');
+        }
     } finally {
         loading.value = false;
     }

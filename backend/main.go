@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // --- Structs ---
@@ -58,6 +61,7 @@ type User struct {
 	Email     string `json:"email"`
 	Bio       string `json:"bio"`
 	AvatarURL string `json:"avatar_url"`
+	Points    int    `json:"points"`
 }
 
 type Credentials struct {
@@ -75,8 +79,8 @@ type Claims struct {
 // --- Globals ---
 
 var db *sql.DB
-var jwtKey = []byte("my_super_secret_key_2026")
-const AdminSecretCode = "Maplas-2026"
+var jwtKey = []byte(getEnv("JWT_SECRET", "my_super_secret_key_2026")) // Fallback for dev only
+var AdminSecretCode = getEnv("ADMIN_SECRET", "Maplas-2026") // Fallback for dev only
 
 // --- Helpers ---
 
@@ -176,10 +180,12 @@ func initDB() {
 	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS city TEXT")
 	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS category TEXT")
 	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS creator_id INT REFERENCES users(id) ON DELETE SET NULL")
+	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS price DOUBLE PRECISION DEFAULT 0")
 	db.Exec("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE CASCADE")
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS points INT DEFAULT 0")
 }
 
 func enableCors(w http.ResponseWriter) {
@@ -194,6 +200,13 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" { http.Error(w, "Method not allowed", http.StatusMethodNotAllowed); return }
 	var creds Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil { http.Error(w, "Invalid request", http.StatusBadRequest); return }
+	
+	// Password Strength Check
+	if len(creds.Password) < 6 {
+		http.Error(w, "Password must be at least 6 characters long", http.StatusBadRequest)
+		return
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
 	if err != nil { http.Error(w, "Server error", http.StatusInternalServerError); return }
 	role := "user"
@@ -339,6 +352,10 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		var pr PlaceRequest
 		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil { http.Error(w, "Invalid body", http.StatusBadRequest); return }
+		
+		// Normalize City Name (Title Case with Turkish support)
+		pr.City = cases.Title(language.Turkish).String(pr.City)
+
 		nameMap := translateContent(pr.Name)
 		descMap := translateContent(pr.Description)
 		nameJSON, _ := json.Marshal(nameMap)
@@ -348,6 +365,10 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if creatorID > 0 {
 			err = db.QueryRow("INSERT INTO places (name, description, lat, lng, category, city, image_url, status, creator_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id", string(nameJSON), string(descJSON), pr.Lat, pr.Lng, pr.Category, pr.City, pr.ImageURL, status, creatorID).Scan(&id)
+			// Award Points (+50 XP)
+			if err == nil {
+				db.Exec("UPDATE users SET points = points + 50 WHERE id = $1", creatorID)
+			}
 		} else {
 			err = db.QueryRow("INSERT INTO places (name, description, lat, lng, category, city, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id", string(nameJSON), string(descJSON), pr.Lat, pr.Lng, pr.Category, pr.City, pr.ImageURL, status).Scan(&id)
 		}
@@ -461,6 +482,8 @@ func commentsHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&c)
 		if userID > 0 {
 			db.QueryRow("INSERT INTO comments (place_id, content, rating, user_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at", c.PlaceID, c.Content, c.Rating, userID).Scan(&c.ID, &c.CreatedAt)
+			// Award Points (+10 XP)
+			db.Exec("UPDATE users SET points = points + 10 WHERE id = $1", userID)
 		} else {
 			db.QueryRow("INSERT INTO comments (place_id, content, rating) VALUES ($1, $2, $3) RETURNING id, created_at", c.PlaceID, c.Content, c.Rating).Scan(&c.ID, &c.CreatedAt)
 		}
@@ -512,7 +535,7 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var u User
-		err := db.QueryRow("SELECT id, username, role, COALESCE(email, ''), COALESCE(bio, ''), COALESCE(avatar_url, '') FROM users WHERE id=$1", userID).Scan(&u.ID, &u.Username, &u.Role, &u.Email, &u.Bio, &u.AvatarURL)
+		err := db.QueryRow("SELECT id, username, role, COALESCE(email, ''), COALESCE(bio, ''), COALESCE(avatar_url, ''), points FROM users WHERE id=$1", userID).Scan(&u.ID, &u.Username, &u.Role, &u.Email, &u.Bio, &u.AvatarURL, &u.Points)
 		if err != nil { http.Error(w, "User not found", http.StatusNotFound); return }
 		json.NewEncoder(w).Encode(u)
 	} else if r.Method == "PUT" {
@@ -527,16 +550,33 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 
 func favoritesHandler(w http.ResponseWriter, r *http.Request) {
 	enableCors(w)
-	if r.Method == "OPTIONS" { return }
+	if r.Method == "OPTIONS" { 
+		w.WriteHeader(http.StatusOK)
+		return 
+	}
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" { http.Error(w, "Missing authorization header", http.StatusUnauthorized); return }
+	if authHeader == "" { 
+		log.Println("Favorites: Missing authorization header")
+		http.Error(w, "Missing authorization header", http.StatusUnauthorized)
+		return 
+	}
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 	claims, err := validateToken(tokenStr)
-	if err != nil { http.Error(w, "Invalid token", http.StatusUnauthorized); return }
+	if err != nil { 
+		log.Printf("Favorites: Invalid token: %v", err)
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return 
+	}
 	var userID int
-	db.QueryRow("SELECT id FROM users WHERE username=$1", claims.Username).Scan(&userID)
+	err = db.QueryRow("SELECT id FROM users WHERE username=$1", claims.Username).Scan(&userID)
+	if err != nil || userID == 0 { 
+		log.Printf("Favorites: User not found for username %s", claims.Username)
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return 
+	}
 
 	if r.Method == "GET" {
+		// ... GET logic unchanged
 		rows, err := db.Query(`
 			SELECT p.id, p.name, p.description, p.lat, p.lng, p.category, p.city, COALESCE(p.image_url, ''), p.status 
 			FROM places p 
@@ -556,16 +596,52 @@ func favoritesHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(places)
 	} else if r.Method == "POST" {
 		var req struct { PlaceID int `json:"place_id"` }
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "Invalid request", http.StatusBadRequest); return }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { 
+			log.Printf("Favorites POST: Invalid body: %v", err)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return 
+		}
 		_, err = db.Exec("INSERT INTO favorites (user_id, place_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", userID, req.PlaceID)
-		if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
+		if err != nil { 
+			log.Printf("Favorites POST: DB Error: %v", err)
+			http.Error(w, "Database error: " + err.Error(), http.StatusInternalServerError)
+			return 
+		}
 		w.WriteHeader(http.StatusCreated)
 	} else if r.Method == "DELETE" {
-		placeID := r.URL.Query().Get("place_id")
+		placeIDStr := r.URL.Query().Get("place_id")
+		placeID, err := strconv.Atoi(placeIDStr)
+		if err != nil { 
+			log.Printf("Favorites DELETE: Invalid place_id: %v", err)
+			http.Error(w, "Invalid place ID", http.StatusBadRequest)
+			return 
+		}
+		
 		_, err = db.Exec("DELETE FROM favorites WHERE user_id = $1 AND place_id = $2", userID, placeID)
-		if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
+		if err != nil { 
+			log.Printf("Favorites DELETE: DB Error: %v", err)
+			http.Error(w, "Database error: " + err.Error(), http.StatusInternalServerError)
+			return 
+		}
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+func leaderboardHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	if r.Method != "GET" { http.Error(w, "Method not allowed", http.StatusMethodNotAllowed); return }
+
+	rows, err := db.Query("SELECT id, username, COALESCE(avatar_url, ''), points FROM users ORDER BY points DESC LIMIT 10")
+	if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		rows.Scan(&u.ID, &u.Username, &u.AvatarURL, &u.Points)
+		users = append(users, u)
+	}
+	json.NewEncoder(w).Encode(users)
 }
 
 func main() {
@@ -581,6 +657,7 @@ func main() {
 	http.HandleFunc("/api/admin", adminHandler)
 	http.HandleFunc("/api/user", userHandler)
 	http.HandleFunc("/api/favorites", favoritesHandler)
+	http.HandleFunc("/api/leaderboard", leaderboardHandler)
 	fmt.Println("Server starting on port 8080...")
 	http.ListenAndServe(":8080", nil)
 }

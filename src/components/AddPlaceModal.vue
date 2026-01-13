@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, shallowRef } from 'vue';
+import { ref, onMounted, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { uploadImage } from '../api';
@@ -26,15 +26,26 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-const form = ref<Place>({
+const form = ref({
   name: '',
   description: '',
   lat: 0,
   lng: 0,
-  category: '',
+  category: 'Tarihi',
   city: '',
   imageUrl: ''
 });
+
+watch(() => props.initialData, (newVal: Place | undefined) => {
+  if (newVal) {
+    // const isTurkish = navigator.language.startsWith('tr') || localStorage.getItem('lang') === 'tr';
+    form.value = {
+      ...newVal,
+      name: typeof newVal.name === 'string' ? newVal.name : (newVal.name['tr'] || Object.values(newVal.name)[0]),
+      description: typeof newVal.description === 'string' ? newVal.description : (newVal.description['tr'] || Object.values(newVal.description)[0])
+    };
+  }
+}, { immediate: true });
 
 const mapContainer = ref<HTMLElement | null>(null);
 const map = shallowRef<L.Map | null>(null);

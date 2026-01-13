@@ -28,6 +28,7 @@ const emit = defineEmits<{
   (e: 'select-place', id: number): void;
   (e: 'view-comments', id: number): void;
   (e: 'toggle-favorite', id: number): void;
+  (e: 'location-updated', location: { lat: number; lng: number }): void;
 }>();
 
 const isDarkMode = inject('isDarkMode', ref(true));
@@ -41,6 +42,19 @@ const userLocation = ref<{ lat: number; lng: number } | null>(null);
 const userMarker = shallowRef<L.Marker | null>(null);
 const routeInfo = ref<{ roads: string[], totalDistance: string, totalTime: string } | null>(null);
 const routeWaypoints = ref<Array<{lat: number, lng: number, name: string}>>([]);
+const transportMode = ref('driving');
+
+const transportOptions = [
+    { id: 'driving', icon: '🚗', label: 'Araba' },
+    { id: 'bicycle', icon: '🚲', label: 'Bisiklet' },
+    { id: 'foot', icon: '🚶', label: 'Yürüyüş' }
+];
+
+watch(transportMode, () => {
+    if (routeWaypoints.value.length >= 2) {
+        updateRouteDisplay();
+    }
+});
 
 const getCategoryColor = (category: string) => {
   switch (category) {
@@ -91,6 +105,7 @@ async function locateUser() {
 
     map.value.once('locationfound', (e: any) => {
         userLocation.value = e.latlng;
+        emit('location-updated', { lat: e.latlng.lat, lng: e.latlng.lng });
         
         if (userMarker.value) {
             userMarker.value.setLatLng(e.latlng);
@@ -109,6 +124,10 @@ async function locateUser() {
         const startIndex = routeWaypoints.value.findIndex(wp => wp.name === t('map.your_location'));
         if (startIndex !== -1) {
             routeWaypoints.value[startIndex] = { lat: e.latlng.lat, lng: e.latlng.lng, name: t('map.your_location') };
+            updateRouteDisplay();
+        } else if (routeWaypoints.value.length > 0) {
+            // User requested location AFTER route was created -> Add to START
+            routeWaypoints.value.unshift({ lat: e.latlng.lat, lng: e.latlng.lng, name: t('map.your_location') });
             updateRouteDisplay();
         }
     });
@@ -183,16 +202,28 @@ function updateRouteDisplay() {
 
     // @ts-ignore
     if (L.Routing) {
+        let profile = 'car';
+        if (transportMode.value === 'bicycle') profile = 'bike';
+        if (transportMode.value === 'foot') profile = 'foot';
+
         // @ts-ignore
         const control = L.Routing.control({
             waypoints: routeWaypoints.value.map(wp => L.latLng(wp.lat, wp.lng)),
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://router.project-osrm.org/route/v1',
+                profile: profile
+            }),
             routeWhileDragging: false,
             addWaypoints: false,
             fitSelectedRoutes: true,
             showAlternatives: false,
             show: false,
             lineOptions: {
-                styles: [{ color: '#42b883', opacity: 0.8, weight: 6 }],
+                styles: [{ 
+                    color: transportMode.value === 'bicycle' ? '#3b82f6' : (transportMode.value === 'foot' ? '#f97316' : '#42b883'), 
+                    opacity: 0.8, 
+                    weight: 6 
+                }],
                 extendToWaypoints: true,
                 missingRouteTolerance: 0
             },
@@ -206,12 +237,31 @@ function updateRouteDisplay() {
         control.on('routesfound', function(e: any) {
             const routes = e.routes;
             const summary = routes[0].summary;
+            const distanceMeters = summary.totalDistance;
             
-            const totalMinutes = Math.round(summary.totalTime / 60);
+            // Manual Speed Calculation (since OSRM demo server might ignore profile)
+            // Car: ~50 km/h = ~833 m/min
+            // Bike: ~15 km/h = ~250 m/min
+            // Foot: ~5 km/h = ~83 m/min
+            let speedMetersPerMin = 833; 
+            if (transportMode.value === 'bicycle') speedMetersPerMin = 250;
+            if (transportMode.value === 'foot') speedMetersPerMin = 83;
+
+            // Use OSRM time for car (it's accurate with traffic/roads), but manual for others
+            let totalMinutes = Math.round(summary.totalTime / 60);
+            
+            if (transportMode.value !== 'driving') {
+                totalMinutes = Math.round(distanceMeters / speedMetersPerMin);
+            }
+
             const hours = Math.floor(totalMinutes / 60);
             const mins = totalMinutes % 60;
             const timeStr = hours > 0 ? `${hours} ${t('map.hours')} ${mins} ${t('map.minutes')}` : `${mins} ${t('map.minutes')}`;
-            const distKm = (summary.totalDistance / 1000).toFixed(1);
+            
+            const modeIcon = transportOptions.find(t => t.id === transportMode.value)?.icon || '🚗';
+            const displayTime = `${modeIcon} ${timeStr}`;
+
+            const distKm = (distanceMeters / 1000).toFixed(1);
 
             const instructions = routes[0].instructions;
             const roads: string[] = instructions
@@ -232,7 +282,7 @@ function updateRouteDisplay() {
             routeInfo.value = {
                 roads: roads.length > 0 ? roads : [t('map.main_roads')],
                 totalDistance: `${distKm} km`,
-                totalTime: timeStr
+                totalTime: displayTime
             };
         });
     }
@@ -314,96 +364,17 @@ onMounted(() => {
 
     map.value.on('popupopen', (e: any) => {
         const popupNode = e.popup._contentNode;
+        const marker = e.popup._source;
+        // Access placeId attached to marker (we need to ensure we attach it in updateMarkers)
+        const placeId = (marker as any).placeId;
         
-        // Use timeout to ensure DOM is ready inside popup
-        setTimeout(() => {
-            const btnAddRoute = popupNode.querySelector('.btn-add-route');
-            const btnComments = popupNode.querySelector('.btn-comments');
-            const btnFavorite = popupNode.querySelector('.btn-favorite');
-            const weatherContainer = popupNode.querySelector('.weather-info');
-            const descContainer = popupNode.querySelector('p'); // The description paragraph
-
-            if (descContainer) {
-                const originalText = descContainer.innerText;
-                // Auto-translate description in popup
-                translateText(originalText, 'auto', locale.value).then(translated => {
-                    if (translated && translated !== originalText) {
-                         descContainer.innerHTML = `${translated} <span class="text-[9px] text-emerald-500 font-bold ml-1 bg-emerald-50 px-1 rounded border border-emerald-100 cursor-help" title="Otomatik Çevrildi">🌐</span>`;
-                    }
-                }).catch(() => {});
+        if (placeId) {
+            const place = props.places.find(p => p.id === placeId);
+            if (place && popupNode) {
+                 // Use timeout to ensure DOM is ready
+                 setTimeout(() => attachPopupEvents(popupNode, place), 50);
             }
-
-            if (btnAddRoute) {
-                // Weather Logic
-                if (weatherContainer) {
-                     const lat = parseFloat(btnAddRoute.dataset.lat);
-                     const lng = parseFloat(btnAddRoute.dataset.lng);
-                     
-                     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`)
-                        .then(res => res.json())
-                        .then(data => {
-                            const weather = data.current_weather;
-                            const temp = weather.temperature;
-                            const code = weather.weathercode;
-                            
-                            // Simple WMO code mapping
-                            let icon = '☀️';
-                            if (code === 1 || code === 2 || code === 3) icon = '⛅';
-                            else if (code === 45 || code === 48) icon = '🌫️';
-                            else if (code >= 51 && code <= 67) icon = '🌧️';
-                            else if (code >= 71 && code <= 77) icon = '❄️';
-                            else if (code >= 80 && code <= 82) icon = '🌦️';
-                            else if (code >= 95) icon = '⛈️';
-
-                            weatherContainer.innerHTML = `<span class="font-medium text-slate-700 dark:text-slate-300">${icon} ${temp}°C</span>`;
-                        })
-                        .catch(err => {
-                            console.error('Weather error:', err);
-                            weatherContainer.innerHTML = '<span class="text-red-400 text-[10px]">Hava durumu yok</span>';
-                        });
-                }
-
-                // Remove old listeners to prevent duplicates if any
-                // @ts-ignore
-                L.DomEvent.off(btnAddRoute, 'click');
-                
-                L.DomEvent.on(btnAddRoute, 'click', (ev: any) => {
-                    L.DomEvent.stopPropagation(ev);
-                    L.DomEvent.preventDefault(ev); // Prevent map click through
-                    
-                    const lat = parseFloat(btnAddRoute.dataset.lat);
-                    const lng = parseFloat(btnAddRoute.dataset.lng);
-                    const name = btnAddRoute.dataset.name;
-                    
-                    console.log('Adding to route:', name, lat, lng); // Debug log
-                    addToRoute(lat, lng, name);
-                });
-            }
-            
-            if (btnComments) {
-                // @ts-ignore
-                L.DomEvent.off(btnComments, 'click');
-                
-                L.DomEvent.on(btnComments, 'click', (ev: any) => {
-                    L.DomEvent.stopPropagation(ev);
-                    L.DomEvent.preventDefault(ev);
-                    
-                    const id = parseInt(btnComments.dataset.id);
-                    emit('view-comments', id);
-                });
-            }
-
-            if (btnFavorite) {
-                // @ts-ignore
-                L.DomEvent.off(btnFavorite, 'click');
-                L.DomEvent.on(btnFavorite, 'click', (ev: any) => {
-                    L.DomEvent.stopPropagation(ev);
-                    L.DomEvent.preventDefault(ev);
-                    const id = parseInt(btnFavorite.dataset.id);
-                    emit('toggle-favorite', id);
-                });
-            }
-        }, 100);
+        }
     });
 
     // @ts-ignore
@@ -457,22 +428,7 @@ watch(() => props.selectedPlaceId, (newId, oldId) => {
   }
 });
 
-function updateMarkers() {
-  if (!map.value) return;
-
-  if (markerClusterGroup.value) {
-    markerClusterGroup.value.clearLayers();
-  } else {
-    markersMap.value.forEach(marker => marker.remove());
-  }
-  
-  markersMap.value.clear();
-
-  props.places.forEach(place => {
-    const marker = L.marker([place.lat, place.lng], {
-      icon: createCustomIcon(place.category, props.selectedPlaceId === place.id)
-    });
-
+function generatePopupContent(place: Place) {
     const placeName = getLocalizedContent(place.name, locale.value);
     const placeDesc = getLocalizedContent(place.description, locale.value);
 
@@ -480,7 +436,7 @@ function updateMarkers() {
         ? `<div class="w-[calc(100%+40px)] -mx-5 -mt-5 mb-3 h-32 rounded-t-xl overflow-hidden"><img src="${place.imageUrl}" alt="${placeName}" class="w-full h-full object-cover" /></div>` 
         : '';
 
-    const popupContent = `
+    return `
         <div class="custom-popup">
             ${imageHtml}
             <div class="popup-header">
@@ -507,26 +463,308 @@ function updateMarkers() {
             </button>
         </div>
     `;
+}
 
-    marker.bindPopup(popupContent, {
-        closeButton: false,
-        className: 'modern-popup'
-    });
-    
-    marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e);
-        emit('select-place', place.id as number);
-    });
+function attachPopupEvents(popupNode: HTMLElement, place: Place) {
+            const btnAddRoute = popupNode.querySelector('.btn-add-route') as HTMLElement;
+            const btnComments = popupNode.querySelector('.btn-comments') as HTMLElement;
+            const btnFavorite = popupNode.querySelector('.btn-favorite') as HTMLElement;
+            const weatherContainer = popupNode.querySelector('.weather-info');
+            const descContainer = popupNode.querySelector('p');
 
-    if (markerClusterGroup.value) {
-        markerClusterGroup.value.addLayer(marker);
-    } else {
-        marker.addTo(map.value!);
+            if (descContainer) {
+                const originalText = descContainer.innerText;
+                translateText(originalText, 'auto', locale.value).then(translated => {
+                    if (translated && translated !== originalText) {
+                         descContainer.innerHTML = `${translated} <span class="text-[9px] text-emerald-500 font-bold ml-1 bg-emerald-50 px-1 rounded border border-emerald-100 cursor-help" title="Otomatik Çevrildi">🌐</span>`;
+                    }
+                }).catch(() => {});
+            }
+
+            if (btnAddRoute) {
+                // Weather Logic (Only if weatherContainer exists)
+                if (weatherContainer) {
+                     const lat = place.lat;
+                     const lng = place.lng;
+                     
+                     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const weather = data.current_weather;
+                            const temp = Math.round(weather.temperature);
+                            const wind = weather.windspeed;
+                            const code = weather.weathercode;
+                            
+                            const getIcon = (c: number) => {
+                                if (c === 0) return '☀️';
+                                if (c === 1 || c === 2 || c === 3) return '⛅';
+                                if (c === 45 || c === 48) return '🌫️';
+                                if (c >= 51 && c <= 67) return '🌧️';
+                                if (c >= 71 && c <= 77) return '❄️';
+                                if (c >= 80 && c <= 82) return '🌦️';
+                                if (c >= 95) return '⛈️';
+                                return '🌡️';
+                            };
+
+                            const currentIcon = getIcon(code);
+
+                            let forecastHtml = '';
+                            if (data.daily && data.daily.time) {
+                                forecastHtml = '<div class="mt-2 pt-2 border-t border-slate-100 dark:border-zinc-700 grid grid-cols-3 gap-1">';
+                                for (let i = 1; i <= 3; i++) {
+                                    if (data.daily.time[i]) {
+                                        const date = new Date(data.daily.time[i]);
+                                        const dayName = date.toLocaleDateString(locale.value, { weekday: 'short' });
+                                        const maxTemp = Math.round(data.daily.temperature_2m_max[i]);
+                                        const dailyIcon = getIcon(data.daily.weathercode[i]);
+                                        
+                                        forecastHtml += `
+                                            <div class="text-center">
+                                                <div class="text-[9px] text-slate-400 font-bold uppercase">${dayName}</div>
+                                                <div class="text-lg leading-none my-0.5">${dailyIcon}</div>
+                                                <div class="text-[10px] font-bold text-slate-700 dark:text-zinc-300">${maxTemp}°</div>
+                                            </div>
+                                        `;
+                                    }
+                                }
+                                forecastHtml += '</div>';
+                            }
+
+                            weatherContainer.innerHTML = `
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-2xl">${currentIcon}</span>
+                                    <div>
+                                        <span class="font-bold text-slate-800 dark:text-white text-sm">${temp}°C</span>
+                                        <span class="text-[10px] text-slate-500 block">💨 ${wind} km/s</span>
+                                    </div>
+                                </div>
+                                ${forecastHtml}
+                            `;
+                        })
+                        .catch(err => {
+                            console.error('Weather error:', err);
+                            weatherContainer.innerHTML = '<span class="text-red-400 text-[10px]">Hava durumu yok</span>';
+                        });
+                }
+                
+                // Route Button
+                // @ts-ignore
+                L.DomEvent.off(btnAddRoute, 'click');
+                L.DomEvent.on(btnAddRoute, 'click', (ev: any) => {
+                    L.DomEvent.stopPropagation(ev);
+                    L.DomEvent.preventDefault(ev);
+                    const name = getLocalizedContent(place.name, locale.value);
+                    addToRoute(place.lat, place.lng, name);
+                });
+            }
+            
+            if (btnComments) {
+                // @ts-ignore
+                L.DomEvent.off(btnComments, 'click');
+                L.DomEvent.on(btnComments, 'click', (ev: any) => {
+                    L.DomEvent.stopPropagation(ev);
+                    L.DomEvent.preventDefault(ev);
+                    emit('view-comments', place.id as number);
+                });
+            }
+
+            if (btnFavorite) {
+                // @ts-ignore
+                L.DomEvent.off(btnFavorite, 'click');
+                L.DomEvent.on(btnFavorite, 'click', (ev: any) => {
+                    L.DomEvent.stopPropagation(ev);
+                    L.DomEvent.preventDefault(ev);
+                    emit('toggle-favorite', place.id as number);
+                });
+            }
+}
+
+function updateMarkers() {
+  if (!map.value) return;
+
+  const newPlaceIds = new Set(props.places.map(p => p.id));
+  
+  // 1. Remove markers that are no longer in the list
+  markersMap.value.forEach((marker, id) => {
+    if (!newPlaceIds.has(id)) {
+        if (markerClusterGroup.value) {
+            markerClusterGroup.value.removeLayer(marker);
+        } else {
+            marker.remove();
+        }
+        markersMap.value.delete(id);
     }
-    
-    markersMap.value.set(place.id as number, marker);
+  });
+
+  // 2. Add new markers or update existing ones
+  props.places.forEach(place => {
+    const existingMarker = markersMap.value.get(place.id as number);
+    const isSelected = props.selectedPlaceId === place.id;
+    const customIcon = createCustomIcon(place.category, isSelected);
+    const popupContent = generatePopupContent(place);
+
+    if (existingMarker) {
+        // Update existing marker
+        existingMarker.setIcon(customIcon);
+        
+        // Update popup content if changed
+        const popup = existingMarker.getPopup();
+        if (popup) {
+             // Only update content if it's different to avoid flicker
+             if (popup.getContent() !== popupContent) {
+                 popup.setContent(popupContent);
+                 
+                 // If popup is currently open, we must re-attach events because the DOM node is replaced
+                 if (popup.isOpen()) {
+                     // Wait for the content to be rendered in DOM
+                     setTimeout(() => {
+                        // @ts-ignore
+                        if (popup._contentNode) {
+                            // @ts-ignore
+                            attachPopupEvents(popup._contentNode, place);
+                        }
+                     }, 50);
+                 }
+             }
+        }
+    } else {
+        // Create new marker
+        const marker = L.marker([place.lat, place.lng], {
+          icon: customIcon
+        });
+        (marker as any).placeId = place.id;
+
+        marker.bindPopup(popupContent, {
+            closeButton: false,
+            className: 'modern-popup'
+        });
+        
+        marker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            emit('select-place', place.id as number);
+        });
+
+        if (markerClusterGroup.value) {
+            markerClusterGroup.value.addLayer(marker);
+        } else {
+            marker.addTo(map.value!);
+        }
+        
+        markersMap.value.set(place.id as number, marker);
+    }
   });
 }
+
+function setRoute(places: Place[]) {
+    clearRoute();
+    places.forEach(p => {
+        addToRoute(p.lat, p.lng, getLocalizedContent(p.name, locale.value));
+    });
+    // Add user location as start if available
+    if (userLocation.value) {
+        routeWaypoints.value.unshift({
+            lat: userLocation.value.lat,
+            lng: userLocation.value.lng,
+            name: t('map.your_location')
+        });
+        updateRouteDisplay();
+    }
+}
+
+async function handleEmergency() {
+    if (!navigator.geolocation) {
+        alert("Konum servisi desteklenmiyor.");
+        return;
+    }
+
+    const confirmSOS = confirm("🚨 ACİL DURUM MODU 🚨\n\nEn yakın sağlık kuruluşuna rota oluşturulsun mu?");
+    if (!confirmSOS) return;
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        userLocation.value = { lat: latitude, lng: longitude };
+
+        // Add user marker
+        if (map.value) {
+             map.value.setView([latitude, longitude], 14);
+             if (!userMarker.value) {
+                 userMarker.value = L.marker([latitude, longitude], {
+                    icon: L.divIcon({ className: 'user-marker', html: '<div class="user-dot"></div>', iconSize: [20, 20] })
+                 }).addTo(map.value);
+             } else {
+                 userMarker.value.setLatLng([latitude, longitude]);
+             }
+        }
+
+        try {
+            // Find nearest hospital or clinic using Overpass API
+            const query = `
+                [out:json];
+                (
+                  node["amenity"~"hospital|clinic|doctors"](around:5000,${latitude},${longitude});
+                  way["amenity"~"hospital|clinic|doctors"](around:5000,${latitude},${longitude});
+                  relation["amenity"~"hospital|clinic|doctors"](around:5000,${latitude},${longitude});
+                );
+                out center;
+            `;
+            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (data.elements && data.elements.length > 0) {
+                // Find closest (simple Euclidean approximation is enough for short distance)
+                let closest: any = null;
+                let minDist = Infinity;
+
+                data.elements.forEach((el: any) => {
+                    const elLat = el.lat || el.center.lat;
+                    const elLng = el.lon || el.center.lon;
+                    const dist = Math.sqrt(Math.pow(elLat - latitude, 2) + Math.pow(elLng - longitude, 2));
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closest = { ...el, lat: elLat, lng: elLng };
+                    }
+                });
+
+                if (closest) {
+                    // Create Route
+                    clearRoute();
+                    const name = closest.tags.name || (closest.tags.amenity === 'hospital' ? 'Hastane' : 'Sağlık Merkezi');
+                    const icon = closest.tags.amenity === 'hospital' ? '🏥' : '🩺';
+                    
+                    routeWaypoints.value = [
+                        { lat: latitude, lng: longitude, name: '🚨 Konumum' },
+                        { lat: closest.lat, lng: closest.lng, name: `${icon} ${name}` }
+                    ];
+                    updateRouteDisplay();
+                    alert(`🚨 En yakın sağlık kuruluşu bulundu: ${name}\nRota oluşturuldu!`);
+                }
+            } else {
+                alert("Yakınlarda (5km) sağlık kuruluşu bulunamadı. Lütfen 112'yi arayın!");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Hata oluştu. Lütfen manuel arama yapın.");
+        }
+
+    }, () => {
+        alert("Konum alınamadı.");
+    });
+}
+
+function openGoogleMapsTransit() {
+    if (routeWaypoints.value.length < 2) return;
+    
+    const start = routeWaypoints.value[0];
+    const end = routeWaypoints.value[routeWaypoints.value.length - 1];
+    
+    if (!start || !end) return;
+
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}&travelmode=transit`;
+    window.open(url, '_blank');
+}
+
+defineExpose({ setRoute });
 </script>
 
 <template>
@@ -536,6 +774,11 @@ function updateMarkers() {
         📍
     </button>
     
+    <!-- SOS Button -->
+    <button class="absolute bottom-5 right-[115px] z-[999] w-11 h-11 bg-red-600 border-2 border-white rounded-full text-lg font-bold text-white shadow-xl cursor-pointer flex items-center justify-center transition-all hover:scale-110 hover:bg-red-700 animate-pulse" @click="handleEmergency" title="Acil Durum (Hastane/Eczane)">
+        SOS
+    </button>
+
     <!-- Route Panels Container -->
     <div class="absolute top-16 md:top-4 left-4 z-[999] flex flex-col gap-3 w-[280px]">
         
@@ -544,6 +787,20 @@ function updateMarkers() {
             <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-100 dark:border-zinc-700">
                 <span class="font-bold text-slate-900 dark:text-white flex items-center gap-2">🚦 Rota Planlayıcı <span class="bg-emerald-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{{ routeWaypoints.length }}</span></span>
                 <button class="text-xs text-red-500 hover:text-red-600 bg-transparent border-none cursor-pointer" @click="clearRoute">Temizle</button>
+            </div>
+            
+            <!-- Transport Modes -->
+            <div class="flex gap-1 bg-slate-100 dark:bg-zinc-700/50 p-1 rounded-lg mb-3">
+                <button 
+                    v-for="mode in transportOptions" 
+                    :key="mode.id"
+                    @click="transportMode = mode.id"
+                    class="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer border-none"
+                    :class="transportMode === mode.id ? 'bg-white dark:bg-zinc-600 text-slate-900 dark:text-white shadow-sm' : 'bg-transparent text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300'"
+                    :title="mode.label"
+                >
+                    <span class="text-sm">{{ mode.icon }}</span>
+                </button>
             </div>
             
             <ul class="m-0 p-0 list-none space-y-2 max-h-[250px] overflow-y-auto pr-1">
@@ -572,7 +829,12 @@ function updateMarkers() {
                     <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ routeInfo.totalTime }}</span>
                     <span class="text-sm text-slate-500 dark:text-zinc-400 ml-2">({{ routeInfo.totalDistance }})</span>
                 </div>
-                <button class="bg-transparent border-none text-slate-400 hover:text-slate-600 cursor-pointer text-lg" @click="routeInfo = null">✕</button>
+                <div class="flex gap-2">
+                    <button class="bg-blue-500 hover:bg-blue-600 text-white border-none rounded p-1.5 cursor-pointer text-xs flex items-center gap-1 transition-colors" @click="openGoogleMapsTransit" title="Google Haritalar'da Toplu Taşıma ile Aç">
+                        🚌 <span class="hidden sm:inline">Toplu Taşıma</span>
+                    </button>
+                    <button class="bg-transparent border-none text-slate-400 hover:text-slate-600 cursor-pointer text-lg" @click="routeInfo = null">✕</button>
+                </div>
             </div>
             
             <div class="max-h-[150px] overflow-y-auto space-y-1 pr-1">

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
-import axios from 'axios';
+import api from '../api';
 
 const { t, locale } = useI18n();
 
@@ -29,7 +29,7 @@ const isLoading = ref(false);
 
 const fetchComments = async () => {
   try {
-    const response = await axios.get<Comment[]>(`http://localhost:8080/api/comments?place_id=${props.placeId}`);
+    const response = await api.get<Comment[]>(`/comments?place_id=${props.placeId}`);
     if (response.data) {
       comments.value = response.data;
     }
@@ -49,7 +49,7 @@ const submitComment = async () => {
       rating: newRating.value
     };
     
-    const response = await axios.post<Comment>('http://localhost:8080/api/comments', payload);
+    const response = await api.post<Comment>('/comments', payload);
     if (response.status === 201) {
       comments.value.unshift(response.data);
       newComment.value = '';

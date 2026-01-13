@@ -42,6 +42,8 @@ const emit = defineEmits<{
   (e: 'logout'): void;
   (e: 'open-admin'): void;
   (e: 'open-profile'): void;
+  (e: 'open-leaderboard'): void;
+  (e: 'open-smart-planner'): void;
   (e: 'close-sidebar'): void;
   (e: 'open-about'): void;
   (e: 'search-nearby'): void;
@@ -95,7 +97,10 @@ const categories = computed(() => {
 });
 
 const cities = computed(() => {
-  const uniqueCities = new Set(props.places.map(p => p.city));
+  const uniqueCities = new Set(props.places.map(p => {
+    // Normalize city name for display in filter
+    return p.city.toLocaleLowerCase('tr-TR').split(' ').map(word => word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1)).join(' ');
+  }));
   return Array.from(uniqueCities).sort();
 });
 
@@ -289,6 +294,9 @@ onMounted(() => {
                     <button @click="$emit('open-profile')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
                         <span>👤</span> {{ t('profile.title', 'Profilim') }}
                     </button>
+                    <button @click="$emit('open-leaderboard')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
+                        <span>🏆</span> Liderlik Tablosu
+                    </button>
                     <div class="h-px bg-slate-100 dark:bg-zinc-700/50 my-1"></div>
                     <button @click="$emit('logout')" class="text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2.5">
                         <span>🚪</span> {{ t('ui.logout') }}
@@ -338,6 +346,11 @@ onMounted(() => {
         
                             <span>+</span> {{ t('ui.add_new') }}
         
+                        </button>
+
+                        <button  
+                            class="px-4 py-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/20 text-xs font-bold whitespace-nowrap hover:brightness-110 hover:scale-105 transition-all cursor-pointer flex-shrink-0 flex items-center gap-1.5 snap-start" @click="$emit('open-smart-planner')">
+                            <span>✨</span> {{ t('ui.smart_planner', 'Asistan') }}
                         </button>
                 
                 <div class="w-px bg-slate-200 dark:bg-zinc-700 mx-1 h-5 self-center flex-shrink-0"></div>
