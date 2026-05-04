@@ -75,32 +75,62 @@ function generateRoute() {
             candidates = candidates.filter(p => allowedCategories.includes(p.category));
         }
 
-        // 2. Score candidates based on distance and "popularity" (random for now)
-        // We want places relatively close to user but also spread out enough for a tour
-        const scored = candidates.map(p => {
+        // 2. Filter by reasonable radius based on duration
+        // 2h -> 30km, 4h -> 70km, 8h -> 150km
+        const maxRadius = (selectedDuration.value || 120) <= 120 ? 30 : 
+                          (selectedDuration.value || 120) <= 240 ? 70 : 150;
+
+        const filteredByDist = candidates.map(p => {
             const dist = getDistance(props.userLocation!.lat, props.userLocation!.lng, p.lat, p.lng);
-            // Score logic: Closer is better, but not TOO close (ignore < 100m).
-            // Prioritize places within 10km for short trips, 50km for long trips.
-            let score = 100 - dist; 
-            if (p.is_favorite) score += 20; // Bonus for favorites (if we had access to user favs here)
-            return { place: p, dist, score };
-        });
+            return { place: p, dist };
+        }).filter(item => item.dist <= maxRadius);
 
-        // Sort by score
-        scored.sort((a, b) => b.score - a.score);
+        // If no places found in radius, try a larger one but warn or just take closest
+        let sourceList = filteredByDist;
+        if (sourceList.length < 2) {
+            // Fallback: Just take closest places regardless of radius but limit to N
+            sourceList = candidates.map(p => {
+                const dist = getDistance(props.userLocation!.lat, props.userLocation!.lng, p.lat, p.lng);
+                return { place: p, dist };
+            }).sort((a, b) => a.dist - b.dist).slice(0, 5);
+        }
 
-        // 3. Select Places based on Duration
-        // Approx: 1 place per hour
-        const placeCount = Math.max(2, Math.floor((selectedDuration.value || 120) / 60)); 
-        const selected = scored.slice(0, placeCount).map(s => s.place);
-
-        if (selected.length === 0) {
+        if (sourceList.length === 0) {
             alert(t('ui.no_results'));
             isGenerating.value = false;
             return;
         }
 
-        emit('create-route', selected);
+        // 3. Select N places based on Duration
+        const placeCount = Math.max(2, Math.floor((selectedDuration.value || 120) / 60));
+        const selectedToRoute = sourceList.slice(0, placeCount).map(s => s.place);
+
+        // 4. LOGICAL SEQUENCING: Nearest Neighbor Algorithm
+        // Start from user location, pick nearest, then from that pick nearest etc.
+        const ordered: any[] = [];
+        let currentLat = props.userLocation!.lat;
+        let currentLng = props.userLocation!.lng;
+        const remaining = [...selectedToRoute];
+
+        while (remaining.length > 0) {
+            let nearestIdx = 0;
+            let minDist = Infinity;
+
+            for (let i = 0; i < remaining.length; i++) {
+                const d = getDistance(currentLat, currentLng, remaining[i].lat, remaining[i].lng);
+                if (d < minDist) {
+                    minDist = d;
+                    nearestIdx = i;
+                }
+            }
+
+            const nextPlace = remaining.splice(nearestIdx, 1)[0];
+            ordered.push(nextPlace);
+            currentLat = nextPlace.lat;
+            currentLng = nextPlace.lng;
+        }
+
+        emit('create-route', ordered);
         emit('close');
     }, 1500); // Fake processing delay for UX
 }

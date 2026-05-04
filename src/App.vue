@@ -92,6 +92,9 @@ function checkAuth() {
     }
 }
 
+const deferredPrompt = ref<any>(null);
+const canInstall = ref(false);
+
 onMounted(() => {
   checkAuth();
   fetchPlaces();
@@ -112,7 +115,29 @@ onMounted(() => {
           alert("Oturum süreniz doldu. Lütfen tekrar giriş yapın.");
       }
   });
+
+  // PWA Install Prompt handling
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt.value = e;
+    canInstall.value = true;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    canInstall.value = false;
+    deferredPrompt.value = null;
+  });
 });
+
+async function handleInstallApp() {
+    if (!deferredPrompt.value) return;
+    deferredPrompt.value.prompt();
+    const { outcome } = await deferredPrompt.value.userChoice;
+    if (outcome === 'accepted') {
+        canInstall.value = false;
+        deferredPrompt.value = null;
+    }
+}
 
 function handleLoginSuccess(user: User, token: string) {
     currentUser.value = user;
@@ -299,6 +324,7 @@ watch(isDarkMode, (newVal) => {
       :selected-place-id="selectedPlaceId"
       :current-user="currentUser"
       :is-open="isSidebarOpen"
+      :can-install="canInstall"
       @select-place="handleSelectPlace"
       @toggle-theme="toggleTheme"
       @add-click="openAddModal"
@@ -314,6 +340,7 @@ watch(isDarkMode, (newVal) => {
       @open-about="showAboutModal = true"
       @search-nearby="handleNearbySearch"
       @toggle-favorite="handleToggleFavorite"
+      @install-app="handleInstallApp"
     />
     <MapDisplay 
       ref="mapDisplayRef"

@@ -29,6 +29,7 @@ const props = defineProps<{
   selectedCategories: string[];
   selectedCity: string;
   showFavoritesOnly?: boolean;
+  canInstall?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -47,6 +48,7 @@ const emit = defineEmits<{
   (e: 'close-sidebar'): void;
   (e: 'open-about'): void;
   (e: 'search-nearby'): void;
+  (e: 'install-app'): void;
   (e: 'update:searchQuery', value: string): void;
   (e: 'update:selectedCategories', value: string[]): void;
   (e: 'update:selectedCity', value: string): void;
@@ -290,6 +292,9 @@ onMounted(() => {
                     </div>
                     <button v-if="currentUser.role === 'admin'" @click="$emit('open-admin')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
                         <span>🛡️</span> {{ t('ui.admin_panel') }}
+                    </button>
+                    <button v-if="canInstall" @click="$emit('install-app')" class="text-left px-4 py-2.5 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors flex items-center gap-2.5 text-blue-600 dark:text-blue-400 font-bold">
+                        <span>📲</span> {{ t('ui.install_app', 'Uygulamayı Yükle') }}
                     </button>
                     <button @click="$emit('open-profile')" class="text-left px-4 py-2.5 text-sm hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors flex items-center gap-2.5 text-slate-700 dark:text-zinc-200">
                         <span>👤</span> {{ t('profile.title', 'Profilim') }}

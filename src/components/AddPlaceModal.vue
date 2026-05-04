@@ -8,8 +8,8 @@ const { t } = useI18n();
 
 interface Place {
   id?: number;
-  name: string;
-  description: string;
+  name: any; // Can be string or Record<string, string>
+  description: any; // Can be string or Record<string, string>
   lat: number;
   lng: number;
   category: string;
@@ -22,11 +22,20 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'save-place', place: Place): void;
+  (e: 'save-place', place: any): void;
   (e: 'close'): void;
 }>();
 
-const form = ref({
+const form = ref<{
+  id?: number;
+  name: string;
+  description: string;
+  lat: number;
+  lng: number;
+  category: string;
+  city: string;
+  imageUrl: string;
+}>({
   name: '',
   description: '',
   lat: 0,
@@ -38,11 +47,18 @@ const form = ref({
 
 watch(() => props.initialData, (newVal: Place | undefined) => {
   if (newVal) {
-    // const isTurkish = navigator.language.startsWith('tr') || localStorage.getItem('lang') === 'tr';
+    const nameStr = typeof newVal.name === 'string' ? newVal.name : (newVal.name?.['tr'] || Object.values(newVal.name || {})[0] || '');
+    const descStr = typeof newVal.description === 'string' ? newVal.description : (newVal.description?.['tr'] || Object.values(newVal.description || {})[0] || '');
+    
     form.value = {
-      ...newVal,
-      name: typeof newVal.name === 'string' ? newVal.name : (newVal.name['tr'] || Object.values(newVal.name)[0]),
-      description: typeof newVal.description === 'string' ? newVal.description : (newVal.description['tr'] || Object.values(newVal.description)[0])
+      id: newVal.id,
+      lat: newVal.lat,
+      lng: newVal.lng,
+      category: newVal.category,
+      city: newVal.city,
+      imageUrl: newVal.imageUrl || '',
+      name: nameStr,
+      description: descStr
     };
   }
 }, { immediate: true });
@@ -56,7 +72,20 @@ const isUploading = ref(false);
 
 onMounted(() => {
   if (props.initialData) {
-    form.value = { ...props.initialData };
+    const newVal = props.initialData;
+    const nameStr = typeof newVal.name === 'string' ? newVal.name : (newVal.name?.['tr'] || Object.values(newVal.name || {})[0] || '');
+    const descStr = typeof newVal.description === 'string' ? newVal.description : (newVal.description?.['tr'] || Object.values(newVal.description || {})[0] || '');
+
+    form.value = {
+        id: newVal.id,
+        lat: newVal.lat,
+        lng: newVal.lng,
+        category: newVal.category,
+        city: newVal.city,
+        imageUrl: newVal.imageUrl || '',
+        name: nameStr,
+        description: descStr
+    };
   }
 
   initMap();

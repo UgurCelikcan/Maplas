@@ -44,6 +44,46 @@ const routeInfo = ref<{ roads: string[], totalDistance: string, totalTime: strin
 const routeWaypoints = ref<Array<{lat: number, lng: number, name: string}>>([]);
 const transportMode = ref('driving');
 
+function shareRoute() {
+    if (routeWaypoints.value.length < 2) return;
+    
+    // We only share the coordinates and names of the places
+    const data = routeWaypoints.value.map(wp => ({
+        la: wp.lat,
+        lo: wp.lng,
+        n: wp.name
+    }));
+    
+    const encodedData = btoa(encodeURIComponent(JSON.stringify(data)));
+    const url = new URL(window.location.href);
+    url.searchParams.set('route', encodedData);
+    
+    navigator.clipboard.writeText(url.toString()).then(() => {
+        alert("Rota bağlantısı kopyalandı! Bu linki başkalarıyla paylaşabilirsin.");
+    });
+}
+
+function loadRouteFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const encodedRoute = params.get('route');
+    if (encodedRoute) {
+        try {
+            const decodedData = JSON.parse(decodeURIComponent(atob(encodedRoute)));
+            const waypoints = decodedData.map((d: any) => ({
+                lat: d.la,
+                lng: d.lo,
+                name: d.n
+            }));
+            
+            clearRoute();
+            routeWaypoints.value = waypoints;
+            updateRouteDisplay();
+        } catch (e) {
+            console.error("Error decoding route from URL", e);
+        }
+    }
+}
+
 const transportOptions = [
     { id: 'driving', icon: '🚗', label: 'Araba' },
     { id: 'bicycle', icon: '🚲', label: 'Bisiklet' },
@@ -362,6 +402,8 @@ onMounted(() => {
     L.control.layers(baseMaps, overlayMaps, { position: 'bottomleft' }).addTo(map.value);
     L.control.zoom({ position: 'bottomright' }).addTo(map.value);
 
+    loadRouteFromURL();
+
     map.value.on('popupopen', (e: any) => {
         const popupNode = e.popup._contentNode;
         const marker = e.popup._source;
@@ -657,18 +699,10 @@ function updateMarkers() {
 
 function setRoute(places: Place[]) {
     clearRoute();
+    // addToRoute already handles adding user location as the first point if it exists
     places.forEach(p => {
         addToRoute(p.lat, p.lng, getLocalizedContent(p.name, locale.value));
     });
-    // Add user location as start if available
-    if (userLocation.value) {
-        routeWaypoints.value.unshift({
-            lat: userLocation.value.lat,
-            lng: userLocation.value.lng,
-            name: t('map.your_location')
-        });
-        updateRouteDisplay();
-    }
 }
 
 async function handleEmergency() {
@@ -843,6 +877,10 @@ defineExpose({ setRoute });
                     <span class="truncate">{{ road }}</span>
                 </div>
             </div>
+
+            <button @click="shareRoute" class="w-full mt-3 bg-indigo-500 hover:bg-indigo-600 text-white border-none py-2 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 text-xs">
+                🔗 Rotayı Paylaş
+            </button>
         </div>
 
     </div>

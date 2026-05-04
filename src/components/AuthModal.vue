@@ -39,10 +39,14 @@ async function handleSubmit() {
         alert(t('auth.register_success'));
         mode.value = 'login';
         password.value = '';
+        error.value = '';
     }
 
   } catch (err: any) {
-    if (err.response && err.response.status === 409) {
+    if (err.response && err.response.data && err.response.data.error) {
+        // Show specific error from backend if available
+        error.value = err.response.data.error;
+    } else if (err.response && err.response.status === 409) {
         error.value = t('auth.error_taken');
     } else if (err.response && err.response.status === 401) {
         error.value = t('auth.error_invalid');

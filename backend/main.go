@@ -118,8 +118,19 @@ func initDB() {
 		log.Fatalf("Could not connect to database: %v", err)
 	}
 
-	// Create tables with JSONB support
+	// Create tables with all necessary columns from the start
 	createTables := `
+	CREATE TABLE IF NOT EXISTS users (
+		id SERIAL PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL,
+		password TEXT NOT NULL,
+		role TEXT DEFAULT 'user',
+		email TEXT DEFAULT '',
+		bio TEXT DEFAULT '',
+		avatar_url TEXT DEFAULT '',
+		points INT DEFAULT 0
+	);
+
 	CREATE TABLE IF NOT EXISTS places (
 		id SERIAL PRIMARY KEY,
 		name JSONB NOT NULL,
@@ -130,7 +141,8 @@ func initDB() {
 		city TEXT,
 		image_url TEXT,
 		status TEXT DEFAULT 'pending',
-		creator_id INT REFERENCES users(id) ON DELETE SET NULL
+		creator_id INT REFERENCES users(id) ON DELETE SET NULL,
+		price DOUBLE PRECISION DEFAULT 0
 	);
 
 	CREATE TABLE IF NOT EXISTS comments (
@@ -140,13 +152,6 @@ func initDB() {
 		rating INT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		user_id INT REFERENCES users(id) ON DELETE CASCADE
-	);
-
-	CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		username TEXT UNIQUE NOT NULL,
-		password TEXT NOT NULL,
-		role TEXT DEFAULT 'user'
 	);
 
 	CREATE TABLE IF NOT EXISTS favorites (
@@ -174,18 +179,6 @@ func initDB() {
 			log.Printf("Migration error: %v", err)
 		}
 	}
-
-	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
-	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS image_url TEXT")
-	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS city TEXT")
-	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS category TEXT")
-	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS creator_id INT REFERENCES users(id) ON DELETE SET NULL")
-	db.Exec("ALTER TABLE places ADD COLUMN IF NOT EXISTS price DOUBLE PRECISION DEFAULT 0")
-	db.Exec("ALTER TABLE comments ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE CASCADE")
-	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''")
-	db.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS points INT DEFAULT 0")
 }
 
 func enableCors(w http.ResponseWriter) {
@@ -199,23 +192,38 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" { return }
 	if r.Method != "POST" { http.Error(w, "Method not allowed", http.StatusMethodNotAllowed); return }
 	var creds Credentials
-	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil { http.Error(w, "Invalid request", http.StatusBadRequest); return }
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil { 
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+		return 
+	}
 	
 	// Password Strength Check
 	if len(creds.Password) < 6 {
-		http.Error(w, "Password must be at least 6 characters long", http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Password must be at least 6 characters long"})
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
-	if err != nil { http.Error(w, "Server error", http.StatusInternalServerError); return }
+	if err != nil { 
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Server error while hashing password"})
+		return 
+	}
 	role := "user"
 	if creds.SecretCode == AdminSecretCode { role = "admin" }
 	var userID int
 	err = db.QueryRow("INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id", creds.Username, string(hashedPassword), role).Scan(&userID)
 	if err != nil {
-		if strings.Contains(err.Error(), "unique constraint") { http.Error(w, "Username already taken", http.StatusConflict); return }
-		http.Error(w, "Database error", http.StatusInternalServerError); return
+		if strings.Contains(err.Error(), "unique constraint") { 
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Username already taken"})
+			return 
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error: " + err.Error()})
+		return
 	}
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "User created", "role": role})
