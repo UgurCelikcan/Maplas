@@ -220,6 +220,30 @@ func initDB() {
 			log.Printf("Migration error: %v", err)
 		}
 	}
+
+	// Seed data if places table is empty
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM places").Scan(&count)
+	if count == 0 {
+		log.Println("Seeding initial places from places.json...")
+		file, err := os.ReadFile("places.json")
+		if err == nil {
+			var seedPlaces []PlaceRequest
+			if err := json.Unmarshal(file, &seedPlaces); err == nil {
+				for _, sp := range seedPlaces {
+					nameMap := translateContent(sp.Name)
+					descMap := translateContent(sp.Description)
+					nameJSON, _ := json.Marshal(nameMap)
+					descJSON, _ := json.Marshal(descMap)
+					db.Exec("INSERT INTO places (name, description, lat, lng, category, city, status) VALUES ($1, $2, $3, $4, $5, $6, 'approved')",
+						string(nameJSON), string(descJSON), sp.Lat, sp.Lng, sp.Category, sp.City)
+				}
+				log.Printf("Successfully seeded %d places", len(seedPlaces))
+			}
+		} else {
+			log.Printf("Could not find places.json for seeding: %v", err)
+		}
+	}
 }
 
 func enableCors(w http.ResponseWriter) {
