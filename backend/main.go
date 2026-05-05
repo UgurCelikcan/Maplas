@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -82,6 +87,10 @@ var db *sql.DB
 var jwtKey = []byte(getEnv("JWT_SECRET", "my_super_secret_key_2026")) // Fallback for dev only
 var AdminSecretCode = getEnv("ADMIN_SECRET", "Maplas-2026") // Fallback for dev only
 
+var r2Client *s3.Client
+var r2BucketName string
+var r2PublicUrl string
+
 // --- Helpers ---
 
 func getEnv(key, fallback string) string {
@@ -89,6 +98,38 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func initR2() {
+	accountID := os.Getenv("R2_ACCOUNT_ID")
+	accessKey := os.Getenv("R2_ACCESS_KEY")
+	secretKey := os.Getenv("R2_SECRET_KEY")
+	r2BucketName = os.Getenv("R2_BUCKET_NAME")
+	r2PublicUrl = os.Getenv("R2_PUBLIC_URL")
+
+	if accountID == "" || accessKey == "" || secretKey == "" || r2BucketName == "" {
+		log.Println("R2 storage not configured, falling back to local storage")
+		return
+	}
+
+	r2Resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		return aws.Endpoint{
+			URL: fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID),
+		}, nil
+	})
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithEndpointResolverWithOptions(r2Resolver),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+		config.WithRegion("auto"),
+	)
+	if err != nil {
+		log.Printf("Failed to load R2 config: %v", err)
+		return
+	}
+
+	r2Client = s3.NewFromConfig(cfg)
+	log.Println("Cloudflare R2 storage initialized")
 }
 
 func initDB() {
@@ -279,6 +320,25 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	ext := strings.ToLower(filepath.Ext(handler.Filename))
 	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".gif" && ext != ".webp" { http.Error(w, "Invalid file type", http.StatusBadRequest); return }
 	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+
+	if r2Client != nil {
+		_, err = r2Client.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket:      aws.String(r2BucketName),
+			Key:         aws.String(filename),
+			Body:        file,
+			ContentType: aws.String(handler.Header.Get("Content-Type")),
+		})
+		if err != nil {
+			log.Printf("R2 Upload Error: %v", err)
+			http.Error(w, "Error uploading to R2", http.StatusInternalServerError)
+			return
+		}
+		fileURL := fmt.Sprintf("%s/%s", r2PublicUrl, filename)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"url": fileURL})
+		return
+	}
+
 	filePath := filepath.Join("uploads", filename)
 	dst, err := os.Create(filePath)
 	if err != nil { http.Error(w, "Error saving file", http.StatusInternalServerError); return }
@@ -654,6 +714,7 @@ func leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	initDB()
+	initR2()
 	os.MkdirAll("uploads", os.ModePerm)
 	fs := http.FileServer(http.Dir("./uploads"))
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))

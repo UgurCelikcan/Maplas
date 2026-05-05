@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { getLeaderboard } from '../gamification';
+import { getLeaderboard } from '../api';
 import { getUserRank } from '../gamification';
 
 // const { t } = useI18n();
