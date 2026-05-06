@@ -129,7 +129,12 @@ body {
     }
 
 
-    /* --- CUSTOM MARKERS --- */
+    .custom-marker-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible !important;
+    }
 
     /* Custom Marker Pin */
     .marker-pin {
