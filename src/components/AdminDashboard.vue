@@ -166,7 +166,7 @@ function switchTab(tab: 'pending' | 'users' | 'stats') {
         <!-- Pending Approvals Tab -->
         <div v-if="activeTab === 'pending'" class="animate-in fade-in">
             <div v-if="loading" class="text-center py-10 text-slate-400">{{ t('common.loading') }}</div>
-            <div v-else-if="pendingPlaces.length === 0" class="text-center py-10 text-slate-400">
+            <div v-else-if="!pendingPlaces || pendingPlaces.length === 0" class="text-center py-10 text-slate-400">
                 {{ t('admin.no_pending') }}
             </div>
             <div v-else class="grid gap-4">
@@ -175,9 +175,9 @@ function switchTab(tab: 'pending' | 'users' | 'stats') {
                     <div v-else class="w-20 h-20 bg-slate-200 dark:bg-zinc-700 rounded-lg flex items-center justify-center text-2xl">📍</div>
                     
                     <div class="flex-grow">
-                        <h3 class="font-bold text-lg m-0">{{ place.name }}</h3>
+                        <h3 class="font-bold text-lg m-0">{{ getLocalizedContent(place.name, locale) }}</h3>
                         <p class="text-sm text-slate-500 dark:text-zinc-400 m-0">{{ place.city }} • {{ t(`categories.${place.category}`) }}</p>
-                        <p class="text-sm mt-1 line-clamp-2">{{ place.description }}</p>
+                        <p class="text-sm mt-1 line-clamp-2">{{ getLocalizedContent(place.description, locale) }}</p>
                     </div>
 
                     <div class="flex gap-2 w-full md:w-auto">

@@ -235,8 +235,11 @@ func initDB() {
 					descMap := translateContent(sp.Description)
 					nameJSON, _ := json.Marshal(nameMap)
 					descJSON, _ := json.Marshal(descMap)
-					db.Exec("INSERT INTO places (name, description, lat, lng, category, city, status) VALUES ($1, $2, $3, $4, $5, $6, 'approved')",
-						string(nameJSON), string(descJSON), sp.Lat, sp.Lng, sp.Category, sp.City)
+					_, err = db.Exec("INSERT INTO places (name, description, lat, lng, category, city, status) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+						string(nameJSON), string(descJSON), sp.Lat, sp.Lng, sp.Category, sp.City, "approved")
+					if err != nil {
+						log.Printf("Error seeding place %s: %v", sp.Name, err)
+					}
 				}
 				log.Printf("Successfully seeded %d places", len(seedPlaces))
 			}
@@ -424,11 +427,14 @@ func placesHandler(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query(query, args...)
 		if err != nil { http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError); return }
 		defer rows.Close()
-		var places []Place
+		places := []Place{}
 		for rows.Next() {
 			var p Place
 			var nameJSON, descJSON []byte
-			rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status, &p.IsFavorite)
+			if err := rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status, &p.IsFavorite); err != nil {
+				log.Printf("Scan error: %v", err)
+				continue
+			}
 			json.Unmarshal(nameJSON, &p.Name)
 			json.Unmarshal(descJSON, &p.Description)
 			places = append(places, p)
@@ -499,39 +505,46 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 			stats["pending_places"] = pendingPlaces
 			stats["total_users"] = totalUsers
 			stats["total_comments"] = totalComments
-			rows, _ := db.Query("SELECT category, COUNT(*) FROM places GROUP BY category")
+			rows, err := db.Query("SELECT category, COUNT(*) FROM places GROUP BY category")
 			categories := make(map[string]int)
-			for rows.Next() {
-				var cat string
-				var count int
-				rows.Scan(&cat, &count)
-				categories[cat] = count
+			if err == nil {
+				for rows.Next() {
+					var cat string
+					var count int
+					rows.Scan(&cat, &count)
+					categories[cat] = count
+				}
+				rows.Close()
 			}
-			rows.Close()
 			stats["categories"] = categories
 			json.NewEncoder(w).Encode(stats)
 			return
 		}
 		if r.Method == "GET" && action == "users" {
-			rows, _ := db.Query("SELECT id, username, role FROM users ORDER BY id ASC")
+			rows, err := db.Query("SELECT id, username, role FROM users ORDER BY id ASC")
+			if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
 			defer rows.Close()
-			var users []User
+			users := []User{}
 			for rows.Next() {
 				var u User
-				rows.Scan(&u.ID, &u.Username, &u.Role)
+				if err := rows.Scan(&u.ID, &u.Username, &u.Role); err != nil { continue }
 				users = append(users, u)
 			}
 			json.NewEncoder(w).Encode(users)
 			return
 		}
 		if r.Method == "GET" && action == "pending" {
-			rows, _ := db.Query("SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM places WHERE status = 'pending' ORDER BY id DESC")
+			rows, err := db.Query("SELECT id, name, description, lat, lng, category, city, COALESCE(image_url, '') as image_url, status FROM places WHERE status = 'pending' ORDER BY id DESC")
+			if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
 			defer rows.Close()
-			var places []Place
+			places := []Place{}
 			for rows.Next() {
 				var p Place
 				var nameJSON, descJSON []byte
-				rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status)
+				if err := rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status); err != nil {
+					log.Printf("Admin pending scan error: %v", err)
+					continue
+				}
 				json.Unmarshal(nameJSON, &p.Name)
 				json.Unmarshal(descJSON, &p.Description)
 				places = append(places, p)
@@ -541,8 +554,17 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.Method == "POST" && (action == "approve" || action == "reject") {
 			var req struct { ID int `json:"id"` }
-			json.NewDecoder(r.Body).Decode(&req)
-			if action == "approve" { db.Exec("UPDATE places SET status = 'approved' WHERE id = $1", req.ID) } else { db.Exec("DELETE FROM places WHERE id = $1", req.ID) }
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid body", http.StatusBadRequest)
+				return
+			}
+			if action == "approve" { 
+				_, err := db.Exec("UPDATE places SET status = 'approved' WHERE id = $1", req.ID)
+				if err != nil { log.Printf("Approve error: %v", err); http.Error(w, "DB error", http.StatusInternalServerError); return }
+			} else { 
+				_, err := db.Exec("DELETE FROM places WHERE id = $1", req.ID)
+				if err != nil { log.Printf("Reject error: %v", err); http.Error(w, "DB error", http.StatusInternalServerError); return }
+			}
 			w.WriteHeader(http.StatusOK)
 		}
 	})(w, r)
@@ -668,19 +690,21 @@ func favoritesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		// ... GET logic unchanged
 		rows, err := db.Query(`
-			SELECT p.id, p.name, p.description, p.lat, p.lng, p.category, p.city, COALESCE(p.image_url, ''), p.status 
+			SELECT p.id, p.name, p.description, p.lat, p.lng, p.category, p.city, COALESCE(p.image_url, '') as image_url, p.status 
 			FROM places p 
 			JOIN favorites f ON p.id = f.place_id 
 			WHERE f.user_id = $1`, userID)
 		if err != nil { http.Error(w, "Database error", http.StatusInternalServerError); return }
 		defer rows.Close()
-		var places []Place
+		places := []Place{}
 		for rows.Next() {
 			var p Place
 			var nameJSON, descJSON []byte
-			rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status)
+			if err := rows.Scan(&p.ID, &nameJSON, &descJSON, &p.Lat, &p.Lng, &p.Category, &p.City, &p.ImageURL, &p.Status); err != nil {
+				log.Printf("Favorites scan error: %v", err)
+				continue
+			}
 			json.Unmarshal(nameJSON, &p.Name)
 			json.Unmarshal(descJSON, &p.Description)
 			places = append(places, p)
