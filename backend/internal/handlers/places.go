@@ -5,12 +5,12 @@ import (
 	"log"
 	"net/http"
 
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"backend/internal/auth"
 	"backend/internal/db"
 	"backend/internal/middleware"
 	"backend/internal/models"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func PlacesHandler(w http.ResponseWriter, r *http.Request) {

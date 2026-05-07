@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"backend/internal/utils"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var JwtKey = []byte(utils.GetEnv("JWT_SECRET", "my_super_secret_key_2026"))

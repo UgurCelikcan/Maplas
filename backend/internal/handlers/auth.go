@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 	"backend/internal/auth"
 	"backend/internal/db"
 	"backend/internal/middleware"
 	"backend/internal/models"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {

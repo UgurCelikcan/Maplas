@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 */tmp
 .env
+
+# Go
+backend/server.exe
+backend/tmp/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# OS files
+.DS_Store

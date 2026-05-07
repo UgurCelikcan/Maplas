@@ -2,8 +2,9 @@
 import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api, { getAdminStats } from '../api';
+import { getLocalizedContent } from '../utils';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const emit = defineEmits<{
   (e: 'close'): void;

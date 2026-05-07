@@ -16,7 +16,7 @@ type Place struct {
 }
 
 type PlaceRequest struct {
-	Name        string  `json:"name"` // Frontend sends string
+	Name        string  `json:"name"`        // Frontend sends string
 	Description string  `json:"description"` // Frontend sends string
 	Lat         float64 `json:"lat"`
 	Lng         float64 `json:"lng"`

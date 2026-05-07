@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Place, Comment } from './types';
+import type { Place } from './types';
 
 // Use environment variable for API URL in production, fallback to /api for local proxy
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
