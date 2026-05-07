@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-// import { getLocalizedContent } from '../utils';
+import { getDistance } from '../utils';
 
 const { t } = useI18n();
 const emit = defineEmits(['close', 'create-route']);
@@ -14,7 +14,14 @@ const props = defineProps<{
 const step = ref(1);
 const selectedDuration = ref<number | null>(null); // minutes
 const selectedInterests = ref<string[]>([]);
+const transportMode = ref('driving-car');
 const isGenerating = ref(false);
+
+const transportOptions = [
+    { id: 'driving-car', label: 'Araç', icon: '🚗' },
+    { id: 'foot-walking', label: 'Yürüyerek', icon: '🚶' },
+    { id: 'cycling-regular', label: 'Bisiklet', icon: '🚲' }
+];
 
 const interests = [
     { id: 'history', label: 'Tarih & Kültür', categories: ['Tarihi', 'Müze', 'Antik Kent'], icon: '🏛️' },
@@ -42,18 +49,6 @@ function toggleInterest(id: string) {
             selectedInterests.value.push(id);
         }
     }
-}
-
-// Haversine Distance Calculation
-function getDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 6371; // km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
 }
 
 function generateRoute() {
@@ -130,7 +125,7 @@ function generateRoute() {
             currentLng = nextPlace.lng;
         }
 
-        emit('create-route', ordered);
+        emit('create-route', ordered, transportMode.value);
         emit('close');
     }, 1500); // Fake processing delay for UX
 }
@@ -176,19 +171,33 @@ function generateRoute() {
                     </div>
                 </div>
 
-                <!-- Step 2: Interests -->
+                <!-- Step 2: Interests & Transport -->
                 <div v-else-if="step === 2" class="animate-in slide-in-from-right-8 fade-in duration-300">
-                    <h3 class="text-lg font-semibold mb-4 text-slate-800 dark:text-zinc-200">Nelerden hoşlanırsın? ❤️</h3>
-                    <div class="grid grid-cols-2 gap-3 mb-6">
+                    <h3 class="text-lg font-semibold mb-3 text-slate-800 dark:text-zinc-200">Nelerden hoşlanırsın? ❤️</h3>
+                    <div class="grid grid-cols-2 gap-2 mb-6">
                         <button 
                             v-for="int in interests" 
                             :key="int.id"
                             @click="toggleInterest(int.id)"
-                            class="flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all cursor-pointer h-32 gap-2 hover:scale-105"
+                            class="flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer h-24 gap-1 hover:scale-105"
                             :class="selectedInterests.includes(int.id) ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 shadow-md scale-105' : 'border-slate-100 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800/50 hover:border-emerald-200'"
                         >
-                            <span class="text-3xl">{{ int.icon }}</span>
-                            <span class="font-bold text-sm text-center text-slate-700 dark:text-zinc-300">{{ int.label }}</span>
+                            <span class="text-2xl">{{ int.icon }}</span>
+                            <span class="font-bold text-xs text-center text-slate-700 dark:text-zinc-300">{{ int.label }}</span>
+                        </button>
+                    </div>
+
+                    <h3 class="text-lg font-semibold mb-3 text-slate-800 dark:text-zinc-200">Nasıl gezeceksin? 🚲</h3>
+                    <div class="flex gap-2 mb-8">
+                        <button 
+                            v-for="opt in transportOptions" 
+                            :key="opt.id"
+                            @click="transportMode = opt.id"
+                            class="flex-1 flex flex-col items-center py-3 rounded-xl border-2 transition-all cursor-pointer gap-1"
+                            :class="transportMode === opt.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-100 dark:border-zinc-800 hover:border-blue-200'"
+                        >
+                            <span class="text-xl">{{ opt.icon }}</span>
+                            <span class="text-[10px] font-bold uppercase tracking-tight">{{ opt.label }}</span>
                         </button>
                     </div>
                     

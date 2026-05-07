@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { ref, provide, watch, onMounted, computed } from 'vue';
+import { ref, provide, watch, onMounted, computed, defineAsyncComponent } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api, { getNearbyPlaces, setFavoriteStatus } from './api';
 import type { Place, User } from './types';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
-import AddPlaceModal from './components/AddPlaceModal.vue';
-import CommentsModal from './components/CommentsModal.vue';
-import AuthModal from './components/AuthModal.vue';
-import AdminDashboard from './components/AdminDashboard.vue';
-import AboutModal from './components/AboutModal.vue';
-import UserProfile from './components/UserProfile.vue';
-import LeaderboardModal from './components/LeaderboardModal.vue';
-import SmartPlannerModal from './components/SmartPlannerModal.vue';
 import { getLocalizedContent } from './utils';
+
+// Lazy load modals for better initial performance
+const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'));
+const LeaderboardModal = defineAsyncComponent(() => import('./components/LeaderboardModal.vue'));
+const SmartPlannerModal = defineAsyncComponent(() => import('./components/SmartPlannerModal.vue'));
+const AddPlaceModal = defineAsyncComponent(() => import('./components/AddPlaceModal.vue'));
+const CommentsModal = defineAsyncComponent(() => import('./components/CommentsModal.vue'));
+const AuthModal = defineAsyncComponent(() => import('./components/AuthModal.vue'));
+const AdminDashboard = defineAsyncComponent(() => import('./components/AdminDashboard.vue'));
+const AboutModal = defineAsyncComponent(() => import('./components/AboutModal.vue'));
 
 const { t, locale } = useI18n();
 
@@ -199,9 +201,9 @@ function handleSelectPlace(id: number) {
   selectedPlaceId.value = id;
 }
 
-function handleSmartRoute(places: Place[]) {
+function handleSmartRoute(places: Place[], mode: string) {
     if (mapDisplayRef.value) {
-        mapDisplayRef.value.setRoute(places);
+        mapDisplayRef.value.setRoute(places, mode);
     }
     showSmartPlannerModal.value = false;
     isSidebarOpen.value = false; // Close sidebar on mobile to show map
