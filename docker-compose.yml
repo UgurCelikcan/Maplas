@@ -20,34 +20,29 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-password}
       - DB_NAME=${DB_NAME:-places_db}
       - JWT_SECRET=${JWT_SECRET}
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
-      - R2_ACCESS_KEY=${R2_ACCESS_KEY}
-      - R2_SECRET_KEY=${R2_SECRET_KEY}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
-      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       - ADMIN_SECRET=${ADMIN_SECRET}
     depends_on:
       - db
-    ports:
-      - "8080:8080"
+    # No external ports, accessed via Caddy proxy internal network
+
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        - VITE_API_URL=${VITE_API_URL:-/api}
+        - VITE_API_URL=${VITE_API_URL:-https://api.maplas.net}
     restart: always
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - backend
 
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    restart: always
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      - frontend
+volumes:
+  caddy_data:
+  caddy_config:
+

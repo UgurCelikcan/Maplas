@@ -3,19 +3,9 @@ import { ref, onMounted, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { uploadImage } from '../api';
+import type { Place } from '../types';
 
 const { t } = useI18n();
-
-interface Place {
-  id?: number;
-  name: any; // Can be string or Record<string, string>
-  description: any; // Can be string or Record<string, string>
-  lat: number;
-  lng: number;
-  category: string;
-  city: string;
-  imageUrl?: string;
-}
 
 const props = defineProps<{
   initialData?: Place;

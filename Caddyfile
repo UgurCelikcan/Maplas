@@ -1,0 +1,21 @@
+maplas.net {
+    root * /usr/share/caddy
+    file_server
+    try_files {path} /index.html
+
+    # Static uploads proxy (if needed on main domain)
+    reverse_proxy /uploads/* backend:8080
+
+    log {
+        output file /var/log/caddy/frontend_access.log
+    }
+}
+
+api.maplas.net {
+    # Backend Proxy
+    reverse_proxy * backend:8080
+
+    log {
+        output file /var/log/caddy/api_access.log
+    }
+}

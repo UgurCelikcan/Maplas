@@ -2,6 +2,7 @@
 import { ref, provide, watch, onMounted, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api, { getNearbyPlaces, setFavoriteStatus } from './api';
+import type { Place, User } from './types';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
 import AddPlaceModal from './components/AddPlaceModal.vue';
@@ -15,23 +16,6 @@ import SmartPlannerModal from './components/SmartPlannerModal.vue';
 import { getLocalizedContent } from './utils';
 
 const { t, locale } = useI18n();
-
-interface Place {
-  id?: number;
-  name: Record<string, string>; // Changed to Record to match updated PlaceList/utils
-  description: Record<string, string>;
-  lat: number;
-  lng: number;
-  category: string;
-  city: string;
-  imageUrl?: string;
-  is_favorite?: boolean;
-}
-
-interface User {
-  username: string;
-  role: string;
-}
 
 const places = ref<Place[]>([]);
 const selectedPlaceId = ref<number | null>(null);

@@ -4,20 +4,9 @@ import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { getLocalizedContent } from '../utils';
 import { translateText } from '../api';
+import type { Place } from '../types';
 
 const { t, locale } = useI18n();
-
-interface Place {
-  id?: number;
-  name: Record<string, string>;
-  description: Record<string, string>;
-  lat: number;
-  lng: number;
-  category: string;
-  city: string;
-  imageUrl?: string;
-  is_favorite?: boolean;
-}
 
 const props = defineProps<{
   places: Place[];

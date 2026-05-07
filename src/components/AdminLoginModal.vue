@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import axios from 'axios';
+import api from '../api';
 
 const emit = defineEmits<{
   (e: 'login-success'): void;
@@ -15,12 +15,21 @@ async function handleLogin() {
   error.value = '';
   loading.value = true;
   try {
-    const response = await axios.post('http://localhost:8080/api/admin?action=login', {
+    // Admin login usually uses the same login endpoint but checks for role
+    // For this specific modal, it seems it was designed to check a password directly
+    // Let's adapt it to use the new backend structure
+    const response = await api.post('/login', {
+      username: 'admin', // Assuming admin username for this simple modal
       password: password.value
     });
     
-    if (response.data && response.data.success) {
+    if (response.data && response.data.token && response.data.role === 'admin') {
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('role', response.data.role);
+      localStorage.setItem('username', response.data.username);
       emit('login-success');
+    } else {
+      error.value = 'Yönetici yetkiniz yok!';
     }
   } catch (err) {
     error.value = 'Şifre hatalı!';

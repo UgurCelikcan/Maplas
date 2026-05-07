@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { Place, Comment } from './types';
 
 // Use environment variable for API URL in production, fallback to /api for local proxy
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -41,7 +42,7 @@ export const uploadImage = async (file: File) => {
 };
 
 export const getNearbyPlaces = async (lat: number, lng: number, radiusKm: number = 10) => {
-    const response = await api.get<any[]>(`/places?lat=${lat}&lng=${lng}&radius=${radiusKm}`);
+    const response = await api.get<Place[]>(`/places?lat=${lat}&lng=${lng}&radius=${radiusKm}`);
     return response.data;
 };
 
@@ -64,7 +65,7 @@ export const setFavoriteStatus = async (placeId: number, shouldBeFavorite: boole
 };
 
 export const getFavorites = async () => {
-    const response = await api.get<any[]>('/favorites');
+    const response = await api.get<Place[]>('/favorites');
     return response.data;
 };
 
