@@ -160,7 +160,13 @@ async function handleSavePlace(placeData: Place) {
     } else {
         const response = await api.post<Place>('/places', placeData);
         if (response.status === 201) {
-             alert(`🎉 ${t('place.pending_approval')}\n\n🌟 +50 XP Kazandın! (Onaylanınca hesabına işlenecek)`);
+             const result = response.data;
+             if (result.status === 'approved') {
+                alert(`✨ AI Tarafından Onaylandı!\n\n${placeData.name.tr} başarıyla haritaya eklendi.\n🌟 +50 XP Kazandın!`);
+                fetchPlaces(); // Refresh list to show new place
+             } else {
+                alert(`⚠️ AI Kontrolü: Yer onaylanmadı.\n\nSebep: İçerik standartlarımıza uymuyor olabilir.`);
+             }
         }
     }
     showModal.value = false;

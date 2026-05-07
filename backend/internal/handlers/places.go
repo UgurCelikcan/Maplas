@@ -9,6 +9,7 @@ import (
 	"backend/internal/db"
 	"backend/internal/middleware"
 	"backend/internal/models"
+	"backend/internal/utils"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -90,17 +91,28 @@ func PlacesHandler(w http.ResponseWriter, r *http.Request) {
 		// Normalize City Name (Title Case with Turkish support)
 		pr.City = cases.Title(language.Turkish).String(pr.City)
 
+		// --- AI AUTO-VERIFICATION ---
+		aiApproved, aiReason := utils.ValidatePlaceWithAI(pr.Name, pr.Description, pr.Category, pr.City)
+		status := "pending"
+		if aiApproved {
+			status = "approved"
+			log.Printf("AI Auto-Approved: %s (%s)", pr.Name, aiReason)
+		} else {
+			status = "rejected"
+			log.Printf("AI Auto-Rejected: %s (%s)", pr.Name, aiReason)
+		}
+		// ----------------------------
+
 		nameMap := db.TranslateContent(pr.Name)
 		descMap := db.TranslateContent(pr.Description)
 		nameJSON, _ := json.Marshal(nameMap)
 		descJSON, _ := json.Marshal(descMap)
-		status := "pending"
 		var id int
 		var err error
 		if creatorID > 0 {
 			err = db.DB.QueryRow("INSERT INTO places (name, description, lat, lng, category, city, image_url, status, creator_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id", string(nameJSON), string(descJSON), pr.Lat, pr.Lng, pr.Category, pr.City, pr.ImageURL, status, creatorID).Scan(&id)
-			// Award Points (+50 XP)
-			if err == nil {
+			// Award Points (+50 XP) if AI approved
+			if err == nil && status == "approved" {
 				db.DB.Exec("UPDATE users SET points = points + 50 WHERE id = $1", creatorID)
 			}
 		} else {
