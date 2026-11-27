@@ -44,6 +44,7 @@ func InitDB() {
 
 	createTables()
 	migrateToJSONB()
+	migrateAddColumns()
 	seedData()
 }
 
@@ -108,6 +109,19 @@ func migrateToJSONB() {
 		if err != nil {
 			log.Printf("Migration error: %v", err)
 		}
+	}
+}
+
+// migrateAddColumns adds columns that newer code needs to existing databases.
+func migrateAddColumns() {
+	_, err := DB.Exec(`
+		ALTER TABLE places ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+		CREATE INDEX IF NOT EXISTS idx_places_creator ON places (creator_id);
+		CREATE INDEX IF NOT EXISTS idx_places_lat_lng ON places (lat, lng);
+		CREATE INDEX IF NOT EXISTS idx_comments_place ON comments (place_id);
+	`)
+	if err != nil {
+		log.Printf("Migration (add columns) error: %v", err)
 	}
 }
 

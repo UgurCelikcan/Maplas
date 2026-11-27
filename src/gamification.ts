@@ -34,8 +34,6 @@ export function getProgress(points: number): number {
     return Math.min(Math.round((currentProgress / totalGap) * 100), 100);
 }
 
-// Simulating points for now (In a real app, this comes from backend)
 export function getUserPoints(user: any): number {
-    // If backend has points, use it. If not, generate a deterministic fake score based on username length for demo
-    return user.points || (user.username.length * 15) + 20;
+    return user?.points ?? 0;
 }

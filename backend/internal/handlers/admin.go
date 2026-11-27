@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -88,11 +89,16 @@ func AdminHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if action == "approve" {
-				_, err := db.DB.Exec("UPDATE places SET status = 'approved' WHERE id = $1", req.ID)
-				if err != nil {
+				var creatorID *int
+				err := db.DB.QueryRow("UPDATE places SET status = 'approved' WHERE id = $1 AND status = 'pending' RETURNING creator_id", req.ID).Scan(&creatorID)
+				if err != nil && err != sql.ErrNoRows {
 					log.Printf("Approve error: %v", err)
 					http.Error(w, "DB error", http.StatusInternalServerError)
 					return
+				}
+				// The creator gets the +50 XP once the place is approved.
+				if err == nil && creatorID != nil {
+					db.DB.Exec("UPDATE users SET points = points + 50 WHERE id = $1", *creatorID)
 				}
 			} else {
 				_, err := db.DB.Exec("DELETE FROM places WHERE id = $1", req.ID)

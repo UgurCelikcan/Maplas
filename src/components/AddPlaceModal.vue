@@ -151,8 +151,8 @@ async function handleFileChange(event: Event) {
         const file = target.files[0];
         if (!file) return;
         
-        if (file.size > 10 * 1024 * 1024) {
-            alert('File too large (Max 10MB)');
+        if (file.size > 5 * 1024 * 1024) {
+            alert('⚠️ Fotoğraf çok büyük (en fazla 5 MB).');
             return;
         }
 
@@ -160,9 +160,10 @@ async function handleFileChange(event: Event) {
         try {
             const url = await uploadImage(file);
             form.value.imageUrl = url;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Upload failed:', error);
-            alert(t('place.save_error'));
+            const message = typeof error?.response?.data === 'string' ? error.response.data.trim() : '';
+            alert(message ? `⚠️ ${message}` : t('place.save_error'));
         } finally {
             isUploading.value = false;
         }

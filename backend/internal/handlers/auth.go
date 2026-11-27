@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"backend/internal/db"
 	"backend/internal/middleware"
 	"backend/internal/models"
+	"backend/internal/moderation"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,6 +32,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	creds.Username = strings.TrimSpace(creds.Username)
+	isAdmin := auth.IsAdminCode(creds.SecretCode)
+	if check := moderation.CheckUsername(creds.Username, isAdmin); check.Decision == moderation.Reject {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": strings.Join(check.Reasons, " ")})
+		return
+	}
+
 	if len(creds.Password) < 6 {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Password must be at least 6 characters long"})
@@ -43,7 +53,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	role := "user"
-	if auth.IsAdminCode(creds.SecretCode) {
+	if isAdmin {
 		role = "admin"
 	}
 	var userID int
@@ -54,8 +64,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": "Username already taken"})
 			return
 		}
+		log.Printf("Register insert error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Database error: " + err.Error()})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
 		return
 	}
 	w.WriteHeader(http.StatusCreated)

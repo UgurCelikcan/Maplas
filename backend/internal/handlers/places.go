@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"backend/internal/auth"
 	"backend/internal/db"
 	"backend/internal/middleware"
 	"backend/internal/models"
-	"backend/internal/utils"
+	"backend/internal/moderation"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -55,7 +56,8 @@ func PlacesHandler(w http.ResponseWriter, r *http.Request) {
 
 		rows, err := db.DB.Query(query, args...)
 		if err != nil {
-			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			log.Printf("Places query error: %v", err)
+			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -88,20 +90,28 @@ func PlacesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		pr.Name = strings.TrimSpace(pr.Name)
+		pr.Description = strings.TrimSpace(pr.Description)
 		// Normalize City Name (Title Case with Turkish support)
-		pr.City = cases.Title(language.Turkish).String(pr.City)
+		pr.City = cases.Title(language.Turkish).String(strings.TrimSpace(pr.City))
 
-		// --- AI AUTO-VERIFICATION ---
-		aiApproved, aiReason := utils.ValidatePlaceWithAI(pr.Name, pr.Description, pr.Category, pr.City)
-		status := "pending"
-		if aiApproved {
-			status = "approved"
-			log.Printf("AI Auto-Approved: %s (%s)", pr.Name, aiReason)
-		} else {
-			status = "rejected"
-			log.Printf("AI Auto-Rejected: %s (%s)", pr.Name, aiReason)
+		// --- Automatic moderation (see internal/moderation) ---
+		check := moderation.CheckPlace(moderation.PlaceInput{
+			Name: pr.Name, Description: pr.Description, Category: pr.Category, City: pr.City,
+			Lat: pr.Lat, Lng: pr.Lng, ImageURL: pr.ImageURL, UserID: creatorID,
+		})
+		log.Printf("Moderation %s (score %d): %q %v", check.Decision, check.Score, pr.Name, check.Reasons)
+		if check.Decision == moderation.Reject {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":   "Yer eklenemedi: " + strings.Join(check.Reasons, " "),
+				"reasons": check.Reasons,
+			})
+			return
 		}
-		// ----------------------------
+		status := string(check.Decision)
+		// -------------------------------------------------------
 
 		nameMap := db.TranslateContent(pr.Name)
 		descMap := db.TranslateContent(pr.Description)
@@ -111,7 +121,7 @@ func PlacesHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if creatorID > 0 {
 			err = db.DB.QueryRow("INSERT INTO places (name, description, lat, lng, category, city, image_url, status, creator_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id", string(nameJSON), string(descJSON), pr.Lat, pr.Lng, pr.Category, pr.City, pr.ImageURL, status, creatorID).Scan(&id)
-			// Award Points (+50 XP) if AI approved
+			// Award Points (+50 XP) only when approved; pending places get points when an admin approves them
 			if err == nil && status == "approved" {
 				db.DB.Exec("UPDATE users SET points = points + 50 WHERE id = $1", creatorID)
 			}
@@ -120,12 +130,16 @@ func PlacesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			log.Printf("Error inserting place: %v", err)
-			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Database error", http.StatusInternalServerError)
 			return
 		}
 		p := models.Place{ID: id, Name: nameMap, Description: descMap, Lat: pr.Lat, Lng: pr.Lng, Category: pr.Category, City: pr.City, ImageURL: pr.ImageURL, Status: status}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(p)
+		json.NewEncoder(w).Encode(struct {
+			models.Place
+			Moderation moderation.Result `json:"moderation"`
+		}{p, check})
 	} else if r.Method == "PUT" {
 		var pr models.PlaceRequest
 		json.NewDecoder(r.Body).Decode(&pr)

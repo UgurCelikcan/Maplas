@@ -55,9 +55,10 @@ const submitComment = async () => {
       newComment.value = '';
       newRating.value = 5;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving comment:', error);
-    alert(t('comments.error_save'));
+    const message = error?.response?.data?.error;
+    alert(message ? `⚠️ ${message}` : t('comments.error_save'));
   } finally {
     isLoading.value = false;
   }
