@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { getDistance } from '../utils';
 
@@ -16,6 +16,25 @@ const selectedDuration = ref<number | null>(null); // minutes
 const selectedInterests = ref<string[]>([]);
 const transportMode = ref('driving-car');
 const isGenerating = ref(false);
+let generateTimer: ReturnType<typeof setTimeout> | null = null;
+
+function close() {
+    if (generateTimer) {
+        clearTimeout(generateTimer);
+        generateTimer = null;
+    }
+    emit('close');
+}
+
+function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') close();
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown));
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKeydown);
+    if (generateTimer) clearTimeout(generateTimer);
+});
 
 const transportOptions = [
     { id: 'driving-car', label: 'Araç', icon: '🚗' },
@@ -59,7 +78,8 @@ function generateRoute() {
 
     isGenerating.value = true;
 
-    setTimeout(() => {
+    generateTimer = setTimeout(() => {
+        generateTimer = null;
         // 1. Filter by Interest
         let candidates = props.places.filter(p => p.status === 'approved');
         
@@ -132,11 +152,20 @@ function generateRoute() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="$emit('close')">
-    <div class="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden animate-in zoom-in-95 duration-200 relative">
-        
+  <div class="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="close">
+    <div class="bg-white dark:bg-zinc-900 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 animate-in zoom-in-95 duration-200 relative">
+
         <!-- Decoration -->
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500"></div>
+
+        <!-- Close -->
+        <button
+            type="button"
+            @click="close"
+            title="Kapat"
+            aria-label="Kapat"
+            class="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-zinc-800 transition-colors text-lg cursor-pointer"
+        >✕</button>
 
         <div class="p-8">
             <!-- Header -->
@@ -169,6 +198,7 @@ function generateRoute() {
                             </div>
                         </button>
                     </div>
+                    <button @click="close" class="w-full mt-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">Vazgeç</button>
                 </div>
 
                 <!-- Step 2: Interests & Transport -->
@@ -224,6 +254,7 @@ function generateRoute() {
                 </div>
                 <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-2">Mükemmel Rota Hazırlanıyor...</h3>
                 <p class="text-slate-500 dark:text-zinc-400">Yapay zeka senin için en iyi durakları seçiyor.</p>
+                <button @click="close" class="mt-6 px-6 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">İptal</button>
             </div>
 
         </div>
