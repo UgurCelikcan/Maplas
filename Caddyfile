@@ -1,9 +1,26 @@
+(security_headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+}
+
+www.maplas.net {
+    redir https://maplas.net{uri} permanent
+}
+
 maplas.net {
+    import security_headers
+    encode gzip zstd
+
     root * /usr/share/caddy
     file_server
     try_files {path} /index.html
 
-    # Static uploads proxy (if needed on main domain)
+    # Uploaded images are served by the backend
     reverse_proxy /uploads/* backend:8080
 
     log {
@@ -12,6 +29,9 @@ maplas.net {
 }
 
 api.maplas.net {
+    import security_headers
+    encode gzip zstd
+
     # Backend Proxy
     reverse_proxy * backend:8080
 

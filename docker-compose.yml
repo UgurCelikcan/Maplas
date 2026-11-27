@@ -4,10 +4,13 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER:-user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       POSTGRES_DB: ${DB_NAME:-places_db}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Only reachable from this machine (for local tools / dev); not exposed to the internet.
+      - "127.0.0.1:5432:5432"
 
   backend:
     build: ./backend
@@ -15,10 +18,14 @@ services:
     environment:
       - DB_HOST=db
       - DB_USER=${DB_USER:-user}
-      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set in .env}
       - DB_NAME=${DB_NAME:-places_db}
-      - JWT_SECRET=${JWT_SECRET}
-      - ADMIN_SECRET=${ADMIN_SECRET}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
+      - ADMIN_SECRET=${ADMIN_SECRET:?ADMIN_SECRET must be set in .env}
+    volumes:
+      - uploads:/app/uploads
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - db
     # No external ports, accessed via Caddy proxy internal network
@@ -34,6 +41,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp" # HTTP/3
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -41,6 +49,8 @@ services:
       - backend
 
 volumes:
+  pg_data:
+  uploads:
   caddy_data:
   caddy_config:
 

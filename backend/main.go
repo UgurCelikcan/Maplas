@@ -2,32 +2,57 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"strings"
 
+	"backend/internal/auth"
 	"backend/internal/db"
 	"backend/internal/handlers"
+	"backend/internal/middleware"
 	"backend/internal/utils"
 )
 
 func main() {
+	if err := auth.Init(); err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
 	db.InitDB()
 	os.MkdirAll("uploads", os.ModePerm)
 	
 	fs := http.FileServer(http.Dir("./uploads"))
-	http.Handle("/uploads/", http.StripPrefix("/uploads/", fs))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", noDirListing(fs)))
 	
-	http.HandleFunc("/upload", handlers.UploadHandler)
-	http.HandleFunc("/register", handlers.RegisterHandler)
-	http.HandleFunc("/login", handlers.LoginHandler)
-	http.HandleFunc("/places", handlers.PlacesHandler)
-	http.HandleFunc("/comments", handlers.CommentsHandler)
-	http.HandleFunc("/admin", handlers.AdminHandler)
-	http.HandleFunc("/user", handlers.UserHandler)
-	http.HandleFunc("/favorites", handlers.FavoritesHandler)
-	http.HandleFunc("/leaderboard", handlers.LeaderboardHandler)
-	
+	// Rate limits per IP (requests per minute, burst)
+	general := middleware.NewRateLimiter(120, 60) // every API call
+	authLimit := middleware.NewRateLimiter(10, 5) // login / register (password guessing)
+	uploadLimit := middleware.NewRateLimiter(10, 5)
+	writeLimit := middleware.NewRateLimiter(20, 10) // adding places, comments, favorites
+
+	http.HandleFunc("/upload", general.Limit(uploadLimit.Limit(handlers.UploadHandler)))
+	http.HandleFunc("/register", general.Limit(authLimit.Limit(handlers.RegisterHandler)))
+	http.HandleFunc("/login", general.Limit(authLimit.Limit(handlers.LoginHandler)))
+	http.HandleFunc("/places", general.Limit(writeLimit.LimitWrites(handlers.PlacesHandler)))
+	http.HandleFunc("/comments", general.Limit(writeLimit.LimitWrites(handlers.CommentsHandler)))
+	http.HandleFunc("/admin", general.Limit(handlers.AdminHandler))
+	http.HandleFunc("/user", general.Limit(handlers.UserHandler))
+	http.HandleFunc("/favorites", general.Limit(writeLimit.LimitWrites(handlers.FavoritesHandler)))
+	http.HandleFunc("/leaderboard", general.Limit(handlers.LeaderboardHandler))
+
 	port := utils.GetEnv("SERVER_PORT", "8080")
 	fmt.Printf("Server starting on port %s...\n", port)
-	http.ListenAndServe(":"+port, nil)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+
+// noDirListing hides the list of uploaded files; single files are still served.
+func noDirListing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "" || strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
 }

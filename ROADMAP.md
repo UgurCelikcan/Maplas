@@ -6,13 +6,13 @@ Bu belge, projenin mevcut durumuna ve standart yazılım geliştirme pratiklerin
 
 Mevcut prototipin daha ölçeklenebilir ve yönetilebilir hale getirilmesi.
 
-- [ ] **Backend Refactoring**
-  - [ ] `backend/main.go` dosyasını modüler hale getir:
+- [x] **Backend Refactoring**
+  - [x] `backend/main.go` dosyasını modüler hale getir:
     - `internal/handlers`: HTTP isteklerini karşılayan fonksiyonlar.
     - `internal/models`: Veritabanı yapıları (structs).
     - `internal/db`: Veritabanı bağlantısı ve sorgu fonksiyonları.
     - `internal/middleware`: Auth (JWT), CORS, vb. ara katmanlar.
-  - [ ] Hardcoded secret'ları (JWT Key, Admin Code) `.env` dosyasına taşı.
+  - [x] Hardcoded secret'ları (JWT Key, Admin Code) `.env` dosyasına taşı.
 
 - [ ] **Frontend State Management**
   - [ ] **Pinia** kütüphanesini projeye dahil et.
@@ -54,8 +54,8 @@ Uygulamanın kararlılığını sağlama.
   - [ ] Kritik bileşenlerin (MapDisplay, AuthModal) unit testleri.
 
 - [ ] **Güvenlik**
-  - [ ] Rate Limiting ekle (API spam koruması).
-  - [ ] Resim yüklemeleri için boyut ve tür kontrolünü sıkılaştır.
+  - [x] Rate Limiting ekle (API spam koruması).
+  - [x] Resim yüklemeleri için boyut ve tür kontrolünü sıkılaştır.
 
 ## 🚢 Faz 4: DevOps ve Dağıtım (Deployment)
 

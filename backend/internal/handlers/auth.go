@@ -43,7 +43,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	role := "user"
-	if creds.SecretCode == auth.AdminSecretCode {
+	if auth.IsAdminCode(creds.SecretCode) {
 		role = "admin"
 	}
 	var userID int
