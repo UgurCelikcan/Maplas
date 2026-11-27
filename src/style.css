@@ -119,6 +119,11 @@ body {
         @apply flex items-center mb-2 cursor-pointer hover:text-emerald-500 transition-colors !important;
     }
 
+    /* Dark map: darken the light tiles when no dark tile URL is configured */
+    .map-tiles-dark {
+        filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+    }
+
     /* Attribution */
     .leaflet-control-attribution {
         @apply bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm px-2 py-0.5 rounded-tr-lg text-[10px] text-slate-500 dark:text-zinc-500 !important;

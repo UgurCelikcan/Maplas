@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { getLocalizedContent, getCategoryColor, getCategoryEmoji } from '../utils';
 import { translateText } from '../api';
+import { createLightLayer, createDarkLayer } from '../mapTiles';
 import type { Place } from '../types';
 import RoutePanel from './map/RoutePanel.vue';
 import { useMapRouting } from '../composables/useMapRouting';
@@ -253,8 +254,8 @@ function attachPopupEvents(popupNode: HTMLElement, place: Place) {
 onMounted(() => {
   if (mapContainer.value) {
     map.value = L.map(mapContainer.value, { zoomControl: false }).setView([39.0, 35.0], 6);
-    const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO' });
-    const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO' });
+    const cartoLight = createLightLayer();
+    const cartoDark = createDarkLayer();
     
     if (isDarkMode.value) cartoDark.addTo(map.value);
     else cartoLight.addTo(map.value);

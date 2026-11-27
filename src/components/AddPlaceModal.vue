@@ -3,6 +3,7 @@ import { ref, onMounted, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { uploadImage } from '../api';
+import { createLightLayer } from '../mapTiles';
 import type { Place } from '../types';
 
 const { t } = useI18n();
@@ -89,9 +90,7 @@ function initMap() {
 
         map.value = L.map(mapContainer.value).setView([startLat, startLng], startZoom);
         
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(map.value);
+        createLightLayer().addTo(map.value);
 
         map.value.on('click', (e: L.LeafletMouseEvent) => {
             updateLocation(e.latlng.lat, e.latlng.lng);
