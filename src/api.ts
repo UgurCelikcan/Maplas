@@ -74,14 +74,64 @@ export const getLeaderboard = async () => {
     return response.data;
 };
 
-export const translateText = async (text: string, from: string, to: string) => {
-    try {
-        const response = await axios.get(`https://lingva.dialectapp.org/api/v1/${from}/${to}/${encodeURIComponent(text)}`);
-        return response.data.translation;
-    } catch (error) {
-        console.error('Translation error:', error);
-        return null;
+// --- Translation with cache ---
+// Each text is translated once per language, remembered in localStorage,
+// and at most 3 requests run at the same time.
+const TRANSLATION_STORE_KEY = 'translations-v1';
+const MAX_STORED_TRANSLATIONS = 500;
+const MAX_PARALLEL_TRANSLATIONS = 3;
+
+const storedTranslations: Record<string, string> = (() => {
+    try { return JSON.parse(localStorage.getItem(TRANSLATION_STORE_KEY) || '{}'); } catch { return {}; }
+})();
+const pendingTranslations = new Map<string, Promise<string | null>>();
+let activeTranslations = 0;
+const translationQueue: Array<() => void> = [];
+
+function saveTranslation(key: string, value: string) {
+    storedTranslations[key] = value;
+    const keys = Object.keys(storedTranslations);
+    for (const old of keys.slice(0, Math.max(0, keys.length - MAX_STORED_TRANSLATIONS))) {
+        delete storedTranslations[old];
     }
+    try { localStorage.setItem(TRANSLATION_STORE_KEY, JSON.stringify(storedTranslations)); } catch { /* storage full */ }
+}
+
+async function withTranslationSlot<T>(task: () => Promise<T>): Promise<T> {
+    if (activeTranslations >= MAX_PARALLEL_TRANSLATIONS) {
+        await new Promise<void>(resolve => translationQueue.push(resolve));
+    }
+    activeTranslations++;
+    try {
+        return await task();
+    } finally {
+        activeTranslations--;
+        translationQueue.shift()?.();
+    }
+}
+
+export const translateText = (text: string, from: string, to: string): Promise<string | null> => {
+    if (!text || !text.trim()) return Promise.resolve(null);
+    const key = `${from}|${to}|${text}`;
+    if (key in storedTranslations) return Promise.resolve(storedTranslations[key] ?? null);
+    const pending = pendingTranslations.get(key);
+    if (pending) return pending;
+
+    const request = withTranslationSlot(async () => {
+        try {
+            const response = await axios.get(`https://lingva.dialectapp.org/api/v1/${from}/${to}/${encodeURIComponent(text)}`, { timeout: 8000 });
+            const translation: string | null = response.data?.translation ?? null;
+            if (translation) saveTranslation(key, translation);
+            return translation;
+        } catch (error) {
+            console.error('Translation error:', error);
+            return null;
+        } finally {
+            pendingTranslations.delete(key);
+        }
+    });
+    pendingTranslations.set(key, request);
+    return request;
 };
 
 export default api;

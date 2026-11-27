@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
 import { uploadImage } from '../api';
 import { createLightLayer } from '../mapTiles';
+import { shrinkImage } from '../imageResize';
 import type { Place } from '../types';
 
 const { t } = useI18n();
@@ -148,16 +149,16 @@ async function searchLocation() {
 async function handleFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
-        const file = target.files[0];
-        if (!file) return;
-        
-        if (file.size > 5 * 1024 * 1024) {
-            alert('⚠️ Fotoğraf çok büyük (en fazla 5 MB).');
-            return;
-        }
+        const original = target.files[0];
+        if (!original) return;
 
         isUploading.value = true;
         try {
+            const file = await shrinkImage(original);
+            if (file.size > 5 * 1024 * 1024) {
+                alert('⚠️ Fotoğraf çok büyük (en fazla 5 MB).');
+                return;
+            }
             const url = await uploadImage(file);
             form.value.imageUrl = url;
         } catch (error: any) {

@@ -3,6 +3,7 @@ import { computed, inject, ref, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { getLocalizedContent } from '../utils';
 import { translateText } from '../api';
+import { setLanguage } from '../i18n';
 import { getUserPoints, getUserRank } from '../gamification';
 import type { Place } from '../types';
 import PlaceCard from './list/PlaceCard.vue';
@@ -66,10 +67,9 @@ const languages = [
     { code: 'ar', name: 'العربية', flag: '🇸🇦' }
 ];
 
-function changeLanguage(code: string) {
-    locale.value = code;
-    localStorage.setItem('lang', code);
+async function changeLanguage(code: string) {
     showLangMenu.value = false;
+    await setLanguage(code);
 }
 
 // Proxies for v-model
@@ -126,40 +126,30 @@ const categorySlider = ref<HTMLElement | null>(null);
 const translatedDescriptions = ref<Record<number, string>>({});
 const isTranslating = ref<Record<number, boolean>>({});
 
-// Auto-translate visible places when list changes OR locale changes
-watch([() => props.visiblePlaces, locale], async ([newPlaces, newLocale]) => {
-    // Clear old translations on locale change to force re-fetch
-    // We compare with a stored 'lastLocale' or just clear if the watcher triggers primarily due to locale
-    // Ideally we just re-translate everything visible.
-    
-    for (const place of newPlaces as Place[]) {
-        if (!place.id) continue;
-        
-        const originalText = getLocalizedContent(place.description, newLocale as string);
-        
-        // Skip if empty
+// Auto-translate visible places when the list or the language changes.
+// Only re-runs when place ids or the locale change (not on every favorite click);
+// translateText caches results, so each text is fetched once per language.
+watch([() => props.visiblePlaces.map(p => p.id).join(','), locale], ([, newLocale]) => {
+    const lang = newLocale as string;
+    for (const place of props.visiblePlaces as Place[]) {
+        const id = place.id;
+        if (!id) continue;
+        const originalText = getLocalizedContent(place.description, lang);
         if (!originalText) continue;
 
-        try {
-            isTranslating.value[place.id] = true;
-            // Translate from auto to current locale
-            const translated = await translateText(originalText, 'auto', newLocale as string);
-            
-            // Only update if different (avoid flashing or redundant updates)
-            if (translated && translated !== originalText) {
-                translatedDescriptions.value[place.id] = translated;
-            } else {
-                // If translation is same as original (e.g. source was same language), 
-                // we might want to clear the 'translated' state so it shows as original.
-                delete translatedDescriptions.value[place.id];
-            }
-        } catch (e) {
-            // silent fail
-        } finally {
-            isTranslating.value[place.id] = false;
-        }
+        isTranslating.value[id] = true;
+        translateText(originalText, 'auto', lang)
+            .then(translated => {
+                if (locale.value !== lang) return; // language changed meanwhile
+                if (translated && translated !== originalText) {
+                    translatedDescriptions.value[id] = translated;
+                } else {
+                    delete translatedDescriptions.value[id];
+                }
+            })
+            .finally(() => { isTranslating.value[id] = false; });
     }
-}, { immediate: true, deep: true });
+}, { immediate: true });
 
 onMounted(() => {
     const slider = categorySlider.value;

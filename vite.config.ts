@@ -37,6 +37,21 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Split rarely-changing libraries into their own files so returning
+        // visitors don't re-download them after every site update.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('leaflet-routing-machine') || id.includes('osrm-text-instructions')) return; // loaded on demand
+          if (id.includes('leaflet')) return 'vendor-leaflet';
+          if (id.includes('vue') || id.includes('@intlify')) return 'vendor-vue';
+          return 'vendor';
+        }
+      }
+    }
+  },
   server: {
     host: true,
     port: 5173,

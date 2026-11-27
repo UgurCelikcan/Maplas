@@ -16,4 +16,4 @@ L.Icon.Default.mergeOptions({
 window.L = L;
 
 import 'leaflet.markercluster';
-import 'leaflet-routing-machine';
+// leaflet-routing-machine is large (~800 KB); it is loaded on demand in useMapRouting.ts

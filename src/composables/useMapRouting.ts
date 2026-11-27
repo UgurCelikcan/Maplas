@@ -2,6 +2,18 @@ import { ref, shallowRef, type Ref } from 'vue';
 import L from 'leaflet';
 import { useI18n } from 'vue-i18n';
 
+// The routing library is only downloaded the first time a route is drawn.
+let routingLibrary: Promise<unknown> | null = null;
+function loadRoutingLibrary() {
+    if (!routingLibrary) {
+        routingLibrary = import('leaflet-routing-machine').catch(err => {
+            routingLibrary = null; // allow a retry later
+            throw err;
+        });
+    }
+    return routingLibrary;
+}
+
 export function useMapRouting(map: Ref<L.Map | null>, transportMode: Ref<string>) {
     const { t } = useI18n();
     const routingControl = shallowRef<any>(null);
@@ -35,7 +47,10 @@ export function useMapRouting(map: Ref<L.Map | null>, transportMode: Ref<string>
         updateRouteDisplay();
     }
 
-    function updateRouteDisplay() {
+    let routeRequest = 0;
+
+    async function updateRouteDisplay() {
+        const request = ++routeRequest;
         if (!map.value || routeWaypoints.value.length < 2) {
             if (routingControl.value) {
                 map.value?.removeControl(routingControl.value);
@@ -45,8 +60,18 @@ export function useMapRouting(map: Ref<L.Map | null>, transportMode: Ref<string>
             return;
         }
 
+        try {
+            await loadRoutingLibrary();
+        } catch (err) {
+            console.error('Routing library failed to load:', err);
+            return;
+        }
+        // Something newer was requested while the library was loading.
+        if (request !== routeRequest || !map.value || routeWaypoints.value.length < 2) return;
+
         if (routingControl.value) {
             map.value?.removeControl(routingControl.value);
+            routingControl.value = null;
         }
 
         // @ts-ignore
