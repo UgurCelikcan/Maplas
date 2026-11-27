@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, provide, watch, onMounted, computed, defineAsyncComponent } from 'vue';
 import { useI18n } from 'vue-i18n';
-import api, { getNearbyPlaces, setFavoriteStatus } from './api';
+import api, { setFavoriteStatus } from './api';
 import type { Place, User } from './types';
 import MapDisplay from './components/MapDisplay.vue';
 import PlaceList from './components/PlaceList.vue';
-import { getLocalizedContent } from './utils';
+import { getLocalizedContent, getDistance } from './utils';
 
 // Lazy load modals for better initial performance
 const UserProfile = defineAsyncComponent(() => import('./components/UserProfile.vue'));
@@ -262,9 +262,15 @@ async function handleNearbySearch() {
     navigator.geolocation.getCurrentPosition(async (pos) => {
         try {
             const { latitude, longitude } = pos.coords;
-            const nearbyPlaces = await getNearbyPlaces(latitude, longitude, 10); // 10km radius
-            
-            if (nearbyPlaces && nearbyPlaces.length > 0) {
+            // Filtered in the browser: the user's location is never sent to our server.
+            await fetchPlaces(); // start from the full list
+            const nearbyPlaces = places.value
+                .map(p => ({ place: p, dist: getDistance(latitude, longitude, p.lat, p.lng) }))
+                .filter(item => item.dist <= 10) // 10 km radius
+                .sort((a, b) => a.dist - b.dist)
+                .map(item => item.place);
+
+            if (nearbyPlaces.length > 0) {
                 places.value = nearbyPlaces;
             } else {
                 alert(t('ui.no_results'));
@@ -351,6 +357,7 @@ watch(isDarkMode, (newVal) => {
     <UserProfile
       v-if="showProfileModal"
       @close="showProfileModal = false"
+      @account-deleted="showProfileModal = false; handleLogout(); fetchPlaces()"
     />
     
     <LeaderboardModal

@@ -8,7 +8,51 @@ const { t } = useI18n();
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'account-deleted'): void;
 }>();
+
+// --- KVKK: download my data / delete my account ---
+const isExporting = ref(false);
+const showDeleteConfirm = ref(false);
+const deletePassword = ref('');
+const deleteError = ref('');
+const isDeleting = ref(false);
+
+async function downloadMyData() {
+  isExporting.value = true;
+  try {
+    const res = await api.get('/user?action=export', { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'maplas-verilerim.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Export failed', err);
+    alert('Verileriniz indirilemedi. Lütfen tekrar deneyin.');
+  } finally {
+    isExporting.value = false;
+  }
+}
+
+async function deleteAccount() {
+  deleteError.value = '';
+  if (!deletePassword.value) {
+    deleteError.value = 'Şifrenizi girin.';
+    return;
+  }
+  isDeleting.value = true;
+  try {
+    await api.delete('/user', { data: { password: deletePassword.value } });
+    alert('Hesabınız ve kişisel verileriniz silindi.');
+    emit('account-deleted');
+  } catch (err: any) {
+    deleteError.value = err?.response?.data?.error || 'Hesap silinemedi. Lütfen tekrar deneyin.';
+  } finally {
+    isDeleting.value = false;
+  }
+}
 
 interface UserProfile {
   id: number;
@@ -150,6 +194,34 @@ onMounted(() => {
             <button @click="isEditing = true" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-500/20">
               ✏️ Profili Düzenle
             </button>
+
+            <!-- Privacy (KVKK) -->
+            <div class="border-t border-slate-100 dark:border-zinc-700 pt-4 flex flex-col gap-2">
+              <h4 class="text-xs font-bold text-slate-400 dark:text-zinc-500 uppercase m-0">Gizlilik ve Verilerim</h4>
+              <button @click="downloadMyData" :disabled="isExporting" class="w-full py-2.5 bg-slate-100 dark:bg-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-600 text-slate-700 dark:text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+                {{ isExporting ? 'Hazırlanıyor...' : '📥 Verilerimi İndir' }}
+              </button>
+              <button v-if="!showDeleteConfirm" @click="showDeleteConfirm = true" class="w-full py-2.5 bg-transparent border border-red-200 dark:border-red-900/50 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-semibold rounded-xl transition-colors">
+                🗑️ Hesabımı Sil
+              </button>
+              <div v-else class="p-3 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/10 flex flex-col gap-2">
+                <p class="text-xs text-red-600 dark:text-red-400 m-0 leading-relaxed">
+                  Bu işlem <strong>geri alınamaz.</strong> Profiliniz, yorumlarınız, favorileriniz ve puanlarınız kalıcı olarak silinir.
+                  Eklediğiniz yerler isminiz olmadan haritada kalır. Onaylamak için şifrenizi girin.
+                </p>
+                <input v-model="deletePassword" type="password" placeholder="Şifreniz" autocomplete="current-password"
+                       class="w-full p-2.5 rounded-lg border border-red-200 dark:border-red-900/50 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white text-sm outline-none focus:border-red-400" />
+                <span v-if="deleteError" class="text-xs text-red-500 font-medium">{{ deleteError }}</span>
+                <div class="flex gap-2">
+                  <button @click="showDeleteConfirm = false; deletePassword = ''; deleteError = ''" class="flex-1 py-2 bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-white text-sm font-bold rounded-lg">Vazgeç</button>
+                  <button @click="deleteAccount" :disabled="isDeleting" class="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-lg disabled:opacity-50">{{ isDeleting ? 'Siliniyor...' : 'Kalıcı Olarak Sil' }}</button>
+                </div>
+              </div>
+              <div class="flex justify-center gap-3 text-[11px] mt-1">
+                <a href="/kvkk.html" target="_blank" rel="noopener" class="text-slate-400 hover:text-emerald-500">KVKK Aydınlatma Metni</a>
+                <a href="/gizlilik.html" target="_blank" rel="noopener" class="text-slate-400 hover:text-emerald-500">Gizlilik Politikası</a>
+              </div>
+            </div>
           </div>
 
           <!-- Edit Mode -->

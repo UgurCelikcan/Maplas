@@ -50,7 +50,13 @@ defineEmits<{
           </div>
         </div>
 
-        <div class="mt-4 text-xs text-slate-400 font-medium">
+        <div class="flex gap-3 text-xs">
+          <a href="/kvkk.html" target="_blank" rel="noopener" class="text-emerald-600 dark:text-emerald-400 no-underline hover:underline">KVKK Aydınlatma Metni</a>
+          <span class="text-slate-300 dark:text-zinc-600">•</span>
+          <a href="/gizlilik.html" target="_blank" rel="noopener" class="text-emerald-600 dark:text-emerald-400 no-underline hover:underline">Gizlilik Politikası</a>
+        </div>
+
+        <div class="mt-2 text-xs text-slate-400 font-medium">
           v1.0.0 • {{ t('about.in_development') }}
         </div>
       </div>

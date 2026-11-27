@@ -14,13 +14,18 @@ const mode = ref<'login' | 'register'>('login');
 const username = ref('');
 const password = ref('');
 const secretCode = ref(''); // For admin registration
+const acceptedTerms = ref(false); // KVKK notice acknowledged
 const error = ref('');
 const loading = ref(false);
 
 async function handleSubmit() {
   error.value = '';
+  if (mode.value === 'register' && !acceptedTerms.value) {
+    error.value = 'Devam etmek için KVKK Aydınlatma Metni\'ni okuduğunuzu onaylayın.';
+    return;
+  }
   loading.value = true;
-  
+
   try {
     const endpoint = mode.value === 'login' ? '/login' : '/register';
     const payload = {
@@ -96,6 +101,14 @@ async function handleSubmit() {
             <input v-model="secretCode" type="text" :placeholder="t('auth.invite_code_placeholder')"
                  class="p-3 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors" />
         </div>
+
+        <label v-if="mode === 'register'" class="flex items-start gap-2 text-xs text-slate-500 dark:text-zinc-400 leading-relaxed cursor-pointer">
+            <input v-model="acceptedTerms" type="checkbox" required class="mt-0.5 accent-emerald-500 cursor-pointer" />
+            <span>
+                <a href="/kvkk.html" target="_blank" rel="noopener" class="text-emerald-600 dark:text-emerald-400 underline">KVKK Aydınlatma Metni</a>'ni ve
+                <a href="/gizlilik.html" target="_blank" rel="noopener" class="text-emerald-600 dark:text-emerald-400 underline">Gizlilik Politikası</a>'nı okudum.
+            </span>
+        </label>
 
         <span v-if="error" class="text-red-500 text-xs font-medium text-center">{{ error }}</span>
 

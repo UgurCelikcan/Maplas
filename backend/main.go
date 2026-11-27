@@ -36,7 +36,8 @@ func main() {
 	http.HandleFunc("/places", general.Limit(writeLimit.LimitWrites(handlers.PlacesHandler)))
 	http.HandleFunc("/comments", general.Limit(writeLimit.LimitWrites(handlers.CommentsHandler)))
 	http.HandleFunc("/admin", general.Limit(handlers.AdminHandler))
-	http.HandleFunc("/user", general.Limit(handlers.UserHandler))
+	// Writes on /user include account deletion (password check), so they get the strict limit.
+	http.HandleFunc("/user", general.Limit(authLimit.LimitWrites(handlers.UserHandler)))
 	http.HandleFunc("/favorites", general.Limit(writeLimit.LimitWrites(handlers.FavoritesHandler)))
 	http.HandleFunc("/leaderboard", general.Limit(handlers.LeaderboardHandler))
 
@@ -53,6 +54,8 @@ func noDirListing(next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// File names are random and never reused, so browsers can cache them for a year.
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		next.ServeHTTP(w, r)
 	})
 }
