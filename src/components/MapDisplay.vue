@@ -2,7 +2,7 @@
 import { onMounted, ref, watch, shallowRef, inject } from 'vue';
 import { useI18n } from 'vue-i18n';
 import L from 'leaflet';
-import { getLocalizedContent, getCategoryColor, getCategoryEmoji } from '../utils';
+import { getLocalizedContent, getCategoryColor, getCategoryEmoji, escapeHtml, safeImageUrl } from '../utils';
 import { translateText } from '../api';
 import { createLightLayer, createDarkLayer } from '../mapTiles';
 import type { Place } from '../types';
@@ -216,10 +216,12 @@ function openGoogleMapsTransit() {
 }
 
 function generatePopupContent(place: Place) {
-    const placeName = getLocalizedContent(place.name, locale.value);
-    const placeDesc = getLocalizedContent(place.description, locale.value);
-    const imageHtml = place.imageUrl ? `<div class="w-[calc(100%+40px)] -mx-5 -mt-5 mb-3 h-32 rounded-t-xl overflow-hidden"><img src="${place.imageUrl}" alt="${placeName}" class="w-full h-full object-cover" /></div>` : '';
-    return `<div class="custom-popup">${imageHtml}<div class="popup-header"><span class="popup-category">${getCategoryEmoji(place.category)} ${t(`categories.${place.category}`)}</span><button class="btn-favorite bg-transparent border-none cursor-pointer p-1 transition-transform active:scale-75" data-id="${place.id}"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="${place.is_favorite ? '#ef4444' : 'none'}" stroke="${place.is_favorite ? '#ef4444' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div><div class="flex justify-between items-center mb-1"><span class="popup-city text-[10px] text-slate-400">📍 ${place.city}</span></div><h3>${placeName}</h3><p>${placeDesc}</p><div class="weather-info mt-2 text-xs text-slate-500 flex items-center gap-1"><span class="weather-loading">🌤️ Hava durumu yükleniyor...</span></div><button class="btn-add-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white border-none py-2.5 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}" data-name="${placeName}">🚩 Rotaya Ekle</button><button class="btn-comments w-full mt-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white border-none py-2 px-3 rounded-lg font-medium cursor-pointer transition-colors flex items-center justify-center gap-2" data-id="${place.id}">💬 ${t('map.view_comments')}</button></div>`;
+    // Everything that comes from users is escaped before going into HTML.
+    const placeName = escapeHtml(getLocalizedContent(place.name, locale.value));
+    const placeDesc = escapeHtml(getLocalizedContent(place.description, locale.value));
+    const imageUrl = safeImageUrl(place.imageUrl);
+    const imageHtml = imageUrl ? `<div class="w-[calc(100%+40px)] -mx-5 -mt-5 mb-3 h-32 rounded-t-xl overflow-hidden"><img src="${imageUrl}" alt="${placeName}" loading="lazy" class="w-full h-full object-cover" /></div>` : '';
+    return `<div class="custom-popup">${imageHtml}<div class="popup-header"><span class="popup-category">${getCategoryEmoji(place.category)} ${escapeHtml(t(`categories.${place.category}`))}</span><button class="btn-favorite bg-transparent border-none cursor-pointer p-1 transition-transform active:scale-75" data-id="${place.id}"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="${place.is_favorite ? '#ef4444' : 'none'}" stroke="${place.is_favorite ? '#ef4444' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button></div><div class="flex justify-between items-center mb-1"><span class="popup-city text-[10px] text-slate-400">📍 ${escapeHtml(place.city)}</span></div><h3>${placeName}</h3><p>${placeDesc}</p><div class="weather-info mt-2 text-xs text-slate-500 flex items-center gap-1"><span class="weather-loading">🌤️ Hava durumu yükleniyor...</span></div><button class="btn-add-route w-full mt-3 bg-emerald-500 hover:bg-emerald-600 text-white border-none py-2.5 px-3 rounded-lg font-bold cursor-pointer transition-colors flex items-center justify-center gap-2" data-lat="${place.lat}" data-lng="${place.lng}" data-name="${placeName}">🚩 Rotaya Ekle</button><button class="btn-comments w-full mt-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white border-none py-2 px-3 rounded-lg font-medium cursor-pointer transition-colors flex items-center justify-center gap-2" data-id="${place.id}">💬 ${t('map.view_comments')}</button></div>`;
 }
 
 function attachPopupEvents(popupNode: HTMLElement, place: Place) {
@@ -232,7 +234,7 @@ function attachPopupEvents(popupNode: HTMLElement, place: Place) {
     if (descContainer) {
         const originalText = descContainer.innerText;
         translateText(originalText, 'auto', locale.value).then(translated => {
-            if (translated && translated !== originalText) descContainer.innerHTML = `${translated} <span class="text-[9px] text-emerald-500 font-bold ml-1 bg-emerald-50 px-1 rounded border border-emerald-100 cursor-help" title="Otomatik Çevrildi">🌐</span>`;
+            if (translated && translated !== originalText) descContainer.innerHTML = `${escapeHtml(translated)} <span class="text-[9px] text-emerald-500 font-bold ml-1 bg-emerald-50 px-1 rounded border border-emerald-100 cursor-help" title="Otomatik Çevrildi">🌐</span>`;
         }).catch(() => {});
     }
 

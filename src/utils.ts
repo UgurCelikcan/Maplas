@@ -30,6 +30,22 @@ export function getCategoryEmoji(category: string): string {
     }
 }
 
+// Escapes text before it is put into an HTML string (prevents XSS).
+export function escapeHtml(value: unknown): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Only allow image URLs we serve ourselves or https URLs.
+export function safeImageUrl(url: unknown): string {
+    const s = String(url ?? '');
+    return /^(\/uploads\/[\w.-]+|https:\/\/[^\s"'<>]+)$/.test(s) ? s : '';
+}
+
 export function getDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371; // km
     const dLat = (lat2 - lat1) * Math.PI / 180;
